@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/frontend/assets/css/style.css">
     <link rel="stylesheet" href="/frontend/assets/css/components.css">
     <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 </head>
 <body>
@@ -106,9 +107,9 @@
                 Utils.showLoading(document.getElementById('generatePDFBtn'));
                 const result = await Analytics.generatePDF(groupId);
                 if (!result.success) {
-                    Utils.showError(result.message || 'Failed to generate PDF');
+                    await Utils.showError(result.message || 'Failed to generate PDF');
                 } else {
-                    Utils.showSuccess('PDF generated successfully!');
+                    await Utils.showSuccess('PDF generated successfully!');
                 }
                 Utils.hideLoading(document.getElementById('generatePDFBtn'));
             });

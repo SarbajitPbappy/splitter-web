@@ -6,6 +6,7 @@
     <title>Register - Splitter</title>
     <link rel="stylesheet" href="/frontend/assets/css/style.css">
     <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="container" style="max-width: 400px; margin-top: 5rem;">
@@ -75,22 +76,22 @@
             
             // Validation
             if (!name || name.length < 2) {
-                Utils.showError('Name must be at least 2 characters');
+                await Utils.showError('Name must be at least 2 characters');
                 return;
             }
             
             if (!Utils.validateEmail(email)) {
-                Utils.showError('Please enter a valid email address');
+                await Utils.showError('Please enter a valid email address');
                 return;
             }
             
             if (!Utils.validatePassword(password)) {
-                Utils.showError('Password must be at least 8 characters with uppercase, lowercase, and number');
+                await Utils.showError('Password must be at least 8 characters with uppercase, lowercase, and number');
                 return;
             }
             
             if (password !== confirmPassword) {
-                Utils.showError('Passwords do not match');
+                await Utils.showError('Passwords do not match');
                 return;
             }
             
@@ -107,16 +108,16 @@
                         redirectUrl = `/frontend/groups/details.html?id=${result.group_id}`;
                     }
                     
-                    Utils.showSuccess('Account created successfully! Redirecting...');
+                    await Utils.showSuccess('Account created successfully! Redirecting...');
                     setTimeout(() => {
                         window.location.replace(redirectUrl);
-                    }, 800);
+                    }, 1500);
                 } else {
-                    Utils.showError(result.message || 'Registration failed');
+                    await Utils.showError(result.message || 'Registration failed');
                     Utils.hideLoading(submitBtn);
                 }
             } catch (error) {
-                Utils.showError(error.message || 'An error occurred during registration');
+                await Utils.showError(error.message || 'An error occurred during registration');
                 Utils.hideLoading(submitBtn);
             }
         });

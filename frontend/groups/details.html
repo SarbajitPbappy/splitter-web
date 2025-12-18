@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/frontend/assets/css/style.css">
     <link rel="stylesheet" href="/frontend/assets/css/components.css">
     <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="dashboard">
@@ -38,8 +39,9 @@
                         </div>
                         <p style="color: var(--text-secondary); margin-top: var(--spacing-xs);" id="groupDescription"></p>
                     </div>
-                    <div style="display: flex; gap: var(--spacing-md);">
+                    <div style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
                         <a href="#" id="addExpenseLink" class="btn btn-primary" style="display: none;">Add Expense</a>
+                        <a href="#" id="mealTrackingLink" class="btn btn-secondary" style="display: none;">Meal Tracking</a>
                         <a href="#" id="analyticsLink" class="btn btn-secondary">Analytics</a>
                         <button id="closeGroupBtn" class="btn btn-outline" style="display: none;">Close Group</button>
                         <button id="deleteGroupBtn" class="btn btn-danger" style="display: none;">Delete Group</button>
@@ -113,7 +115,7 @@
             currentGroup = await Groups.getGroup(groupId);
             
             if (!currentGroup) {
-                Utils.showError('Group not found');
+                await Utils.showError('Group not found');
                 setTimeout(() => {
                     window.location.href = '/frontend/groups/list.html';
                 }, 2000);
@@ -139,6 +141,10 @@
             // Update links - Analytics always available, even for closed groups
             document.getElementById('analyticsLink').href = `/frontend/analytics/dashboard.html?group_id=${groupId}`;
             
+            // Meal tracking link (always available, but closed groups are read-only)
+            document.getElementById('mealTrackingLink').href = `/frontend/meals/tracking.html?group_id=${groupId}`;
+            document.getElementById('mealTrackingLink').style.display = 'inline-block';
+            
             // Show/hide buttons based on group status
             if (!isClosed) {
                 // Group is open - show add expense and invite buttons
@@ -150,13 +156,19 @@
                 if (isCreator) {
                     document.getElementById('closeGroupBtn').style.display = 'inline-block';
                     document.getElementById('closeGroupBtn').onclick = async () => {
-                        if (confirm('Are you sure you want to close this group? You can still view analytics and generate PDFs, but cannot add new expenses or invite members.')) {
+                        const confirmed = await Utils.confirm(
+                            'Close Group?',
+                            'You can still view analytics and generate PDFs, but cannot add new expenses or invite members.',
+                            'Yes, Close Group',
+                            'Cancel'
+                        );
+                        if (confirmed) {
                             const result = await Groups.closeGroup(groupId);
                             if (result.success) {
-                                Utils.showSuccess('Group closed successfully');
+                                await Utils.showSuccess('Group closed successfully');
                                 await loadGroupDetails();
                             } else {
-                                Utils.showError(result.message);
+                                await Utils.showError(result.message);
                             }
                         }
                     };
@@ -170,15 +182,16 @@
                 if (isCreator) {
                     document.getElementById('deleteGroupBtn').style.display = 'inline-block';
                     document.getElementById('deleteGroupBtn').onclick = async () => {
-                        if (confirm('Are you sure you want to DELETE this group? This action cannot be undone and will delete all expenses, meals, and related data.')) {
+                        const confirmed = await Utils.confirmDelete(`group "${currentGroup.name}"`);
+                        if (confirmed) {
                             const result = await Groups.deleteGroup(groupId);
                             if (result.success) {
-                                Utils.showSuccess('Group deleted successfully');
+                                await Utils.showSuccess('Group deleted successfully');
                                 setTimeout(() => {
                                     window.location.href = '/frontend/groups/list.html';
                                 }, 1500);
                             } else {
-                                Utils.showError(result.message);
+                                await Utils.showError(result.message);
                             }
                         }
                     };
@@ -225,21 +238,68 @@
                     return;
                 }
                 
-                container.innerHTML = expenses.map(expense => `
+                const user = Auth.getUser();
+                const userId = user ? user.user_id : null;
+                
+                container.innerHTML = expenses.map(expense => {
+                    const canDelete = !currentGroup.is_closed && expense.paid_by_user_id == userId;
+                    return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-md) 0; border-bottom: 1px solid var(--border-color);">
-                        <div>
+                        <div style="flex: 1;">
                             <strong>${Utils.escapeHtml(expense.description || 'No description')}</strong>
                             <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">
                                 Paid by ${Utils.escapeHtml(expense.paid_by_name)} on ${Utils.formatDate(expense.expense_date)}
                             </div>
                         </div>
-                        <div style="font-weight: 600; color: var(--primary-color);">
-                            ${Utils.formatCurrency(expense.amount)}
+                        <div style="display: flex; align-items: center; gap: var(--spacing-md);">
+                            <div style="font-weight: 600; color: var(--primary-color);">
+                                ${Utils.formatCurrency(expense.amount)}
+                            </div>
+                            ${canDelete ? `
+                                <button class="btn btn-outline btn-sm delete-expense-btn" data-expense-id="${expense.expense_id}" style="padding: 4px 8px; font-size: 0.85em;">
+                                    Delete
+                                </button>
+                            ` : ''}
                         </div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
+                
+                // Add delete event listeners
+                if (!currentGroup.is_closed) {
+                    container.querySelectorAll('.delete-expense-btn').forEach(btn => {
+                        btn.addEventListener('click', async (e) => {
+                            const expenseId = parseInt(e.target.dataset.expenseId);
+                            await deleteExpense(expenseId);
+                        });
+                    });
+                }
             } catch (error) {
-                console.error('Error loading expenses:', error);
+                // Silently fail - expenses section will remain empty
+            }
+        }
+        
+        async function deleteExpense(expenseId) {
+            const confirmed = await Utils.confirmDelete(
+                'Delete Expense?',
+                'Are you sure you want to delete this expense? This action cannot be undone.'
+            );
+            if (!confirmed) {
+                return;
+            }
+            
+            try {
+                const result = await Expenses.deleteExpense(expenseId);
+                if (result.success) {
+                    await Utils.showSuccess('Expense deleted successfully!');
+                    await loadExpenses();
+                    // Reload group details to update total amount
+                    await loadGroupDetails();
+                } else {
+                    await Utils.showError(result.message || 'Failed to delete expense');
+                }
+            } catch (error) {
+                await Utils.showError(error.message || 'Failed to delete expense');
             }
         }
         
@@ -258,7 +318,7 @@
             const email = document.getElementById('inviteEmail').value.trim();
             
             if (!Utils.validateEmail(email)) {
-                Utils.showError('Please enter a valid email address');
+                await Utils.showError('Please enter a valid email address');
                 return;
             }
             
@@ -268,10 +328,10 @@
             const result = await Groups.inviteUser(groupId, email);
             
             if (result.success) {
-                Utils.showSuccess('Invitation sent successfully!');
+                await Utils.showSuccess('Invitation sent successfully!');
                 closeInviteModal();
             } else {
-                Utils.showError(result.message || 'Failed to send invitation');
+                await Utils.showError(result.message || 'Failed to send invitation');
                 Utils.hideLoading(submitBtn);
             }
         });

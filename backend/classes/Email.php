@@ -2,16 +2,23 @@
 /**
  * Email Class
  * Handles sending emails for invitations and notifications
+ * Supports: Resend (API), PHPMailer (SMTP), or PHP mail() function
  */
+
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 class Email {
     private $fromEmail;
     private $fromName;
+    private $emailService;
     
     public function __construct() {
         // Get email settings from config or environment
         $this->fromEmail = getenv('SMTP_FROM_EMAIL') ?: 'noreply@splitter.local';
         $this->fromName = getenv('SMTP_FROM_NAME') ?: 'Splitter App';
+        
+        // Determine which email service to use (resend, smtp, or mail)
+        $this->emailService = getenv('EMAIL_SERVICE') ?: 'resend'; // Default to Resend
     }
     
     /**
@@ -154,9 +161,103 @@ class Email {
     }
     
     /**
-     * Send email
+     * Send email using configured service (Resend, SMTP, or mail)
      */
     private function sendEmail($to, $subject, $message) {
+        // For development, log instead of actually sending
+        if (getenv('ENVIRONMENT') === 'development' || php_sapi_name() === 'cli') {
+            error_log("Email would be sent to: {$to}");
+            error_log("Subject: {$subject}");
+            return true; // Return true for development
+        }
+        
+        // Route to appropriate email service
+        switch (strtolower($this->emailService)) {
+            case 'resend':
+                return $this->sendViaResend($to, $subject, $message);
+            case 'smtp':
+                return $this->sendViaSMTP($to, $subject, $message);
+            case 'mail':
+            default:
+                return $this->sendViaMail($to, $subject, $message);
+        }
+    }
+    
+    /**
+     * Send email via Resend API
+     */
+    private function sendViaResend($to, $subject, $message) {
+        try {
+            $resendApiKey = getenv('RESEND_API_KEY');
+            if (empty($resendApiKey)) {
+                error_log('Resend API key not configured. Set RESEND_API_KEY environment variable.');
+                return false;
+            }
+            
+            // Initialize Resend client
+            $resend = \Resend::client($resendApiKey);
+            
+            // Send email
+            $result = $resend->emails->send([
+                'from' => $this->fromName . ' <' . $this->fromEmail . '>',
+                'to' => [$to],
+                'subject' => $subject,
+                'html' => $message,
+            ]);
+            
+            // Log success (optional)
+            error_log("Resend email sent successfully. ID: " . ($result->id ?? 'unknown'));
+            
+            return true;
+        } catch (\Exception $e) {
+            error_log('Resend email error: ' . $e->getMessage());
+            error_log('Resend error trace: ' . $e->getTraceAsString());
+            return false;
+        } catch (\Throwable $e) {
+            error_log('Resend email error (Throwable): ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Send email via PHPMailer SMTP
+     */
+    private function sendViaSMTP($to, $subject, $message) {
+        try {
+            $mailer = new \PHPMailer\PHPMailer\PHPMailer(true);
+            
+            // SMTP Configuration
+            $mailer->isSMTP();
+            $mailer->Host = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
+            $mailer->SMTPAuth = true;
+            $mailer->Username = getenv('SMTP_USERNAME') ?: '';
+            $mailer->Password = getenv('SMTP_PASSWORD') ?: '';
+            $mailer->SMTPSecure = getenv('SMTP_ENCRYPTION') ?: \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $mailer->Port = (int)(getenv('SMTP_PORT') ?: 587);
+            
+            // Set from address
+            $mailer->setFrom($this->fromEmail, $this->fromName);
+            $mailer->addAddress($to);
+            
+            // Content
+            $mailer->isHTML(true);
+            $mailer->CharSet = 'UTF-8';
+            $mailer->Subject = $subject;
+            $mailer->Body = $message;
+            $mailer->AltBody = strip_tags($message);
+            
+            $mailer->send();
+            return true;
+        } catch (\Exception $e) {
+            error_log('SMTP email error: ' . $mailer->ErrorInfo);
+            return false;
+        }
+    }
+    
+    /**
+     * Send email via PHP mail() function (fallback)
+     */
+    private function sendViaMail($to, $subject, $message) {
         $headers = [
             'From: ' . $this->fromName . ' <' . $this->fromEmail . '>',
             'Reply-To: ' . $this->fromEmail,
@@ -166,14 +267,6 @@ class Email {
         ];
         
         $headersString = implode("\r\n", $headers);
-        
-        // For development, log instead of actually sending
-        if (getenv('ENVIRONMENT') === 'development' || php_sapi_name() === 'cli') {
-            error_log("Email would be sent to: {$to}");
-            error_log("Subject: {$subject}");
-            return true; // Return true for development
-        }
-        
         return mail($to, $subject, $message, $headersString);
     }
 }

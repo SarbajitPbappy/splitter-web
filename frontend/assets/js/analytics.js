@@ -14,7 +14,6 @@ const Analytics = {
             });
             return response.success ? response.data : null;
         } catch (error) {
-            console.error('Error fetching analytics:', error);
             return null;
         }
     },
@@ -29,7 +28,6 @@ const Analytics = {
             });
             return response.success ? response.data : null;
         } catch (error) {
-            console.error('Error fetching settlement:', error);
             return null;
         }
     },
@@ -65,7 +63,6 @@ const Analytics = {
                 return { success: false, message: error.message || 'Failed to generate PDF' };
             }
         } catch (error) {
-            console.error('Error generating PDF:', error);
             return { success: false, message: error.message || 'Failed to generate PDF' };
         }
     }

@@ -11,6 +11,16 @@ function sanitizeString($input) {
         return null;
     }
     
+    // Don't sanitize arrays as strings
+    if (is_array($input)) {
+        return $input;
+    }
+    
+    // Convert to string if not already
+    if (!is_string($input)) {
+        $input = (string) $input;
+    }
+    
     // Remove whitespace
     $input = trim($input);
     
@@ -65,7 +75,23 @@ function validateRequired($data, $fields) {
     $missing = [];
     
     foreach ($fields as $field) {
-        if (!isset($data[$field]) || trim($data[$field]) === '') {
+        if (!isset($data[$field])) {
+            $missing[] = $field;
+            continue;
+        }
+        
+        $value = $data[$field];
+        
+        // Handle arrays
+        if (is_array($value)) {
+            if (empty($value)) {
+                $missing[] = $field;
+            }
+            continue;
+        }
+        
+        // Handle strings and other types
+        if (trim((string) $value) === '') {
             $missing[] = $field;
         }
     }
@@ -82,21 +108,38 @@ function sanitizeInput($data, $rules) {
     
     foreach ($rules as $field => $rule) {
         $value = $data[$field] ?? null;
+        $fieldType = $rule['type'] ?? 'string';
         
         // Check required
-        if (isset($rule['required']) && $rule['required'] && ($value === null || trim($value) === '')) {
-            $errors[] = "$field is required";
-            continue;
+        if (isset($rule['required']) && $rule['required']) {
+            if ($value === null || $value === '') {
+                $errors[] = "$field is required";
+                continue;
+            }
+            // For arrays, check if empty
+            if (is_array($value) && empty($value)) {
+                $errors[] = "$field is required";
+                continue;
+            }
         }
         
-        // Skip if not required and value is empty
-        if ($value === null || trim($value) === '') {
-            $sanitized[$field] = $rule['default'] ?? null;
-            continue;
+        // Skip if not required and value is empty (but handle arrays separately)
+        if ($fieldType === 'array') {
+            // For arrays, skip validation if not required and null/empty
+            if (($value === null || (is_array($value) && empty($value))) && !isset($rule['required'])) {
+                $sanitized[$field] = $rule['default'] ?? [];
+                continue;
+            }
+        } else {
+            // For non-arrays, check if empty string
+            if ($value === null || (!is_array($value) && trim($value) === '')) {
+                $sanitized[$field] = $rule['default'] ?? null;
+                continue;
+            }
         }
         
         // Sanitize based on type
-        switch ($rule['type'] ?? 'string') {
+        switch ($fieldType) {
             case 'email':
                 $sanitized[$field] = sanitizeEmail($value);
                 if ($sanitized[$field] === false) {
@@ -124,8 +167,31 @@ function sanitizeInput($data, $rules) {
                 }
                 break;
                 
+            case 'array':
+                // For arrays, validate that it's actually an array
+                if (!is_array($value)) {
+                    $errors[] = "$field must be an array";
+                    break;
+                }
+                // Store array as-is (can be sanitized later if needed)
+                $sanitized[$field] = $value;
+                
+                // Validate array structure if validator is provided
+                if (isset($rule['validate']) && is_callable($rule['validate'])) {
+                    $result = $rule['validate']($sanitized[$field]);
+                    if ($result !== true) {
+                        $errors[] = is_string($result) ? $result : "$field validation failed";
+                    }
+                }
+                break;
+                
             case 'string':
             default:
+                // Ensure value is not an array for string type
+                if (is_array($value)) {
+                    $errors[] = "$field must be a string, not an array";
+                    break;
+                }
                 $sanitized[$field] = sanitizeString($value);
                 if (isset($rule['min_length']) && strlen($sanitized[$field]) < $rule['min_length']) {
                     $errors[] = "$field must be at least {$rule['min_length']} characters";

@@ -91,8 +91,12 @@ class Meal {
     
     /**
      * Calculate meal costs for Bachelor Mess
+     * Contributions are automatically calculated from expenses paid by each person
      */
     public function calculateMessCosts($groupId, $monthYear) {
+        $startDate = $monthYear . '-01';
+        $endDate = date('Y-m-t', strtotime($startDate));
+        
         // Get market expenses for month
         $stmt = $this->db->prepare("
             SELECT total_amount
@@ -101,22 +105,9 @@ class Meal {
         ");
         $stmt->execute([$groupId, $monthYear]);
         $marketExpense = $stmt->fetch();
-        
-        if (!$marketExpense) {
-            return [
-                'total_market_expense' => 0,
-                'total_meals' => 0,
-                'cost_per_meal' => 0,
-                'user_balances' => []
-            ];
-        }
-        
-        $totalMarketExpense = (float) $marketExpense['total_amount'];
+        $totalMarketExpense = $marketExpense ? (float) $marketExpense['total_amount'] : 0;
         
         // Get total meals
-        $startDate = $monthYear . '-01';
-        $endDate = date('Y-m-t', strtotime($startDate));
-        
         $stmt = $this->db->prepare("
             SELECT COUNT(*) as total_meals
             FROM `meals`
@@ -126,18 +117,20 @@ class Meal {
         $result = $stmt->fetch();
         $totalMeals = (int) $result['total_meals'];
         
-        // Calculate cost per meal
-        $costPerMeal = $totalMeals > 0 ? $totalMarketExpense / $totalMeals : 0;
+        // Calculate cost per meal (only if market expense and meals exist)
+        $costPerMeal = ($totalMarketExpense > 0 && $totalMeals > 0) ? $totalMarketExpense / $totalMeals : 0;
         
         // Get meal counts per user
         $mealCounts = $this->getMealCounts($groupId, $monthYear);
         
         // Get total expenses paid by each user in the month (contributions)
+        // This is automatically calculated from all expenses where user paid
         $members = $this->group->getMembers($groupId);
         $userContributions = [];
+        $expenseDetails = [];
         
         $stmt = $this->db->prepare("
-            SELECT paid_by_user_id, SUM(amount) as total_paid
+            SELECT paid_by_user_id, SUM(amount) as total_paid, COUNT(*) as expense_count
             FROM `expenses`
             WHERE group_id = ? AND expense_date BETWEEN ? AND ?
             GROUP BY paid_by_user_id
@@ -145,7 +138,14 @@ class Meal {
         $stmt->execute([$groupId, $startDate, $endDate]);
         while ($row = $stmt->fetch()) {
             $userContributions[$row['paid_by_user_id']] = (float) $row['total_paid'];
+            $expenseDetails[$row['paid_by_user_id']] = [
+                'total_paid' => (float) $row['total_paid'],
+                'expense_count' => (int) $row['expense_count']
+            ];
         }
+        
+        // Calculate total contributions
+        $totalContributions = array_sum($userContributions);
         
         // Calculate balances
         $userBalances = [];
@@ -153,6 +153,7 @@ class Meal {
             $userId = $member['user_id'];
             $mealsEaten = $mealCounts[$userId] ?? 0;
             $contribution = $userContributions[$userId] ?? 0;
+            $expenseCount = $expenseDetails[$userId]['expense_count'] ?? 0;
             $totalOwed = $mealsEaten * $costPerMeal;
             $balance = $contribution - $totalOwed;
             
@@ -163,12 +164,15 @@ class Meal {
                 'cost_per_meal' => round($costPerMeal, 2),
                 'total_owed' => round($totalOwed, 2),
                 'contribution' => round($contribution, 2),
+                'contribution_from_expenses' => round($contribution, 2), // Make it clear it's from expenses
+                'expense_count' => $expenseCount, // Number of expenses paid
                 'balance' => round($balance, 2)
             ];
         }
         
         return [
             'total_market_expense' => round($totalMarketExpense, 2),
+            'total_contributions' => round($totalContributions, 2), // Total from all expenses
             'total_meals' => $totalMeals,
             'cost_per_meal' => round($costPerMeal, 2),
             'user_balances' => $userBalances

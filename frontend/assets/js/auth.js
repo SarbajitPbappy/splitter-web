@@ -47,7 +47,6 @@ const Auth = {
                 password: password
             });
             
-            console.log('Login API response:', response);
             
             // Check if response has the expected structure
             if (response && response.success === true) {
@@ -55,12 +54,10 @@ const Auth = {
                     if (response.data.token) {
                         // Save token
                         API.setToken(response.data.token);
-                        console.log('Token saved to localStorage');
                         
                         // Save user data if available
                         if (response.data.user) {
                             this.setUser(response.data.user);
-                            console.log('User data saved:', response.data.user);
                         }
                         
                         return { 
@@ -68,14 +65,12 @@ const Auth = {
                             user: response.data.user || null 
                         };
                     } else {
-                        console.error('No token in response data:', response.data);
                         return { 
                             success: false, 
                             message: response.message || 'Login failed: No token received' 
                         };
                     }
                 } else {
-                    console.error('No data in response:', response);
                     return { 
                         success: false, 
                         message: response.message || 'Login failed: Invalid response format' 
@@ -84,11 +79,9 @@ const Auth = {
             } else {
                 // Response indicates failure
                 const errorMsg = response?.message || 'Login failed';
-                console.error('Login failed:', errorMsg);
                 return { success: false, message: errorMsg };
             }
         } catch (error) {
-            console.error('Login error:', error);
             return { 
                 success: false, 
                 message: error.message || 'Login failed: Network or server error' 
@@ -128,7 +121,6 @@ const Auth = {
             
             return { success: false, message: response.message || 'Registration failed' };
         } catch (error) {
-            console.error('Registration error:', error);
             return { success: false, message: error.message || 'Registration failed' };
         }
     },
@@ -141,7 +133,6 @@ const Auth = {
             // Try to call logout endpoint
             await API.post('/auth/logout.php');
         } catch (error) {
-            console.error('Logout API error:', error);
             // Continue with local logout even if API call fails
         } finally {
             // Clear local storage
@@ -168,7 +159,6 @@ const Auth = {
             }
             return false;
         } catch (error) {
-            console.error('Token verification error:', error);
             // Token invalid, clear it
             this.logout();
             return false;
@@ -180,7 +170,6 @@ const Auth = {
      */
     async requireAuth() {
         if (!this.isAuthenticated()) {
-            console.log('Not authenticated, redirecting to login');
             window.location.href = '/frontend/login.html';
             return false;
         }
@@ -189,13 +178,11 @@ const Auth = {
         try {
             const isValid = await this.verifyToken();
             if (!isValid) {
-                console.log('Token invalid, redirecting to login');
                 window.location.href = '/frontend/login.html';
                 return false;
             }
             return true;
         } catch (error) {
-            console.error('Token verification error:', error);
             // If verification fails but token exists, allow access
             // The API endpoints will handle invalid tokens
             return true;

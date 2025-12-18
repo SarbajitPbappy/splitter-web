@@ -69,7 +69,6 @@ const API = {
         try {
             data = JSON.parse(text);
         } catch (e) {
-            console.error('Failed to parse JSON response:', text);
             throw new Error('Invalid JSON response from server');
         }
         
@@ -101,7 +100,6 @@ const API = {
             
             return await this.handleResponse(response);
         } catch (error) {
-            console.error('API GET error:', error);
             throw error;
         }
     },
@@ -130,13 +128,10 @@ const API = {
         
         try {
             const url = this.baseURL + endpoint;
-            console.log('API POST:', url, useFormData ? '(FormData)' : data);
             const response = await fetch(url, options);
             const result = await this.handleResponse(response);
-            console.log('API POST response:', result);
             return result;
         } catch (error) {
-            console.error('API POST error:', error);
             throw error;
         }
     },
@@ -154,7 +149,6 @@ const API = {
             
             return await this.handleResponse(response);
         } catch (error) {
-            console.error('API PUT error:', error);
             throw error;
         }
     },
@@ -172,7 +166,6 @@ const API = {
             
             return await this.handleResponse(response);
         } catch (error) {
-            console.error('API DELETE error:', error);
             throw error;
         }
     }

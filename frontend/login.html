@@ -6,6 +6,7 @@
     <title>Login - Splitter</title>
     <link rel="stylesheet" href="/frontend/assets/css/style.css">
     <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="container" style="max-width: 400px; margin-top: 5rem;">
@@ -56,17 +57,17 @@
             const submitBtn = e.target.querySelector('button[type="submit"]');
             
             if (!email) {
-                Utils.showError('Please enter your email address');
+                await Utils.showError('Please enter your email address');
                 return;
             }
             
             if (!password) {
-                Utils.showError('Please enter your password');
+                await Utils.showError('Please enter your password');
                 return;
             }
             
             if (!Utils.validateEmail(email)) {
-                Utils.showError('Please enter a valid email address');
+                await Utils.showError('Please enter a valid email address');
                 return;
             }
             
@@ -75,34 +76,30 @@
             
             try {
                 const result = await Auth.login(email, password);
-                console.log('Login result:', result);
                 
                 if (result && result.success) {
                     // Verify token was saved
                     const token = localStorage.getItem('auth_token');
-                    console.log('Token after login:', token ? 'Saved ✓' : 'Not found ✗');
                     
                     if (token) {
-                        Utils.showSuccess('Login successful! Redirecting...');
+                        await Utils.showSuccess('Login successful! Redirecting...');
                         // Small delay to show success message, then redirect
                         setTimeout(() => {
                             window.location.href = redirectUrl;
-                        }, 500);
+                        }, 1000);
                     } else {
-                        console.error('Token not saved after login');
-                        Utils.showError('Login succeeded but token was not saved. Please try again.');
+                        await Utils.showError('Login succeeded but token was not saved. Please try again.');
                         Utils.hideLoading(submitBtn);
                         submitBtn.disabled = false;
                     }
                 } else {
                     const errorMsg = result?.message || 'Login failed. Please check your credentials.';
-                    Utils.showError(errorMsg);
+                    await Utils.showError(errorMsg);
                     Utils.hideLoading(submitBtn);
                     submitBtn.disabled = false;
                 }
             } catch (error) {
-                console.error('Login exception:', error);
-                Utils.showError(error.message || 'An error occurred during login. Please try again.');
+                await Utils.showError(error.message || 'An error occurred during login. Please try again.');
                 Utils.hideLoading(submitBtn);
                 submitBtn.disabled = false;
             }

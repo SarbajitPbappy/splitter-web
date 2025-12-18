@@ -18,7 +18,13 @@ $userId = getCurrentUserId();
 
 $data = getRequestBody();
 
-// Validate input
+// Extract splits before validation (since it's an array, not a string)
+$splits = [];
+if (isset($data['splits']) && is_array($data['splits'])) {
+    $splits = $data['splits'];
+}
+
+// Validate input (exclude splits from validation since it's an array)
 $rules = [
     'group_id' => ['type' => 'int', 'required' => true, 'min' => 1],
     'paid_by_user_id' => ['type' => 'int', 'required' => true, 'min' => 1],
@@ -27,8 +33,7 @@ $rules = [
     'split_type' => ['type' => 'string', 'required' => true, 'validate' => function($val) {
         return in_array($val, ['Equal', 'Unequal', 'Shares']) ? true : 'Invalid split type';
     }],
-    'expense_date' => ['type' => 'string', 'required' => true],
-    'splits' => ['type' => 'string', 'required' => false] // Will be handled separately
+    'expense_date' => ['type' => 'string', 'required' => true]
 ];
 
 $validation = sanitizeInput($data, $rules);
@@ -66,10 +71,9 @@ if (isset($_FILES['receipt']) && $_FILES['receipt']['error'] === UPLOAD_ERR_OK) 
     }
 }
 
-// Handle splits (for Unequal and Shares)
-$splits = [];
-if (isset($data['splits']) && is_array($data['splits'])) {
-    $splits = $data['splits'];
+// Splits already extracted above, validate structure if needed
+if (!empty($splits) && !is_array($splits)) {
+    sendError('Invalid splits format', 400);
 }
 
 try {

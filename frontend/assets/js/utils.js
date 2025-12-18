@@ -111,37 +111,86 @@ const Utils = {
     },
     
     /**
-     * Show error message
+     * Show error message using SweetAlert
      */
-    showError(message, container = 'body') {
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-message';
-        errorDiv.textContent = message;
-        errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #f44336; color: white; padding: 15px 20px; border-radius: 4px; z-index: 10000; box-shadow: 0 2px 5px rgba(0,0,0,0.2);';
-        
-        const containerEl = typeof container === 'string' ? document.querySelector(container) : container;
-        containerEl.appendChild(errorDiv);
-        
-        setTimeout(() => {
-            errorDiv.remove();
-        }, 5000);
+    async showError(message, title = 'Error') {
+        return Swal.fire({
+            icon: 'error',
+            title: title,
+            text: message,
+            confirmButtonColor: '#f44336',
+            confirmButtonText: 'OK'
+        });
     },
     
     /**
-     * Show success message
+     * Show success message using SweetAlert
      */
-    showSuccess(message, container = 'body') {
-        const successDiv = document.createElement('div');
-        successDiv.className = 'success-message';
-        successDiv.textContent = message;
-        successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4caf50; color: white; padding: 15px 20px; border-radius: 4px; z-index: 10000; box-shadow: 0 2px 5px rgba(0,0,0,0.2);';
-        
-        const containerEl = typeof container === 'string' ? document.querySelector(container) : container;
-        containerEl.appendChild(successDiv);
-        
-        setTimeout(() => {
-            successDiv.remove();
-        }, 3000);
+    async showSuccess(message, title = 'Success') {
+        return Swal.fire({
+            icon: 'success',
+            title: title,
+            text: message,
+            confirmButtonColor: '#4CAF50',
+            confirmButtonText: 'OK',
+            timer: 3000,
+            timerProgressBar: true
+        });
+    },
+    
+    /**
+     * Show info message using SweetAlert
+     */
+    async showInfo(message, title = 'Information') {
+        return Swal.fire({
+            icon: 'info',
+            title: title,
+            text: message,
+            confirmButtonColor: '#2196F3',
+            confirmButtonText: 'OK'
+        });
+    },
+    
+    /**
+     * Show warning message using SweetAlert
+     */
+    async showWarning(message, title = 'Warning') {
+        return Swal.fire({
+            icon: 'warning',
+            title: title,
+            text: message,
+            confirmButtonColor: '#FF9800',
+            confirmButtonText: 'OK'
+        });
+    },
+    
+    /**
+     * Show confirmation dialog using SweetAlert
+     */
+    async confirm(title, text, confirmText = 'Yes', cancelText = 'Cancel') {
+        const result = await Swal.fire({
+            title: title,
+            text: text,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#4CAF50',
+            cancelButtonColor: '#f44336',
+            confirmButtonText: confirmText,
+            cancelButtonText: cancelText
+        });
+        return result.isConfirmed;
+    },
+    
+    /**
+     * Show confirmation dialog for delete actions
+     */
+    async confirmDelete(itemName = 'this item') {
+        return this.confirm(
+            'Are you sure?',
+            `This will permanently delete ${itemName}. This action cannot be undone!`,
+            'Yes, delete it',
+            'Cancel'
+        );
     },
     
     /**
@@ -212,7 +261,7 @@ const Utils = {
             await navigator.clipboard.writeText(text);
             return true;
         } catch (err) {
-            console.error('Failed to copy:', err);
+            // Silently fail - clipboard access may not be available
             return false;
         }
     }

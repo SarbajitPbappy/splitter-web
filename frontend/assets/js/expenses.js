@@ -33,7 +33,6 @@ const Expenses = {
             }
             return { success: false, message: response.message };
         } catch (error) {
-            console.error('Error creating expense:', error);
             return { success: false, message: error.message || 'Failed to create expense' };
         }
     },
@@ -50,8 +49,8 @@ const Expenses = {
             });
             return response.success ? response.data : { expenses: [], total: 0 };
         } catch (error) {
-            console.error('Error fetching expenses:', error);
-            Utils.showError('Failed to load expenses');
+            // Error shown in catch block - showError is async but we're in a non-async context
+            // Let the caller handle errors
             return { expenses: [], total: 0 };
         }
     },
@@ -67,7 +66,6 @@ const Expenses = {
             }
             return { success: false, message: response.message };
         } catch (error) {
-            console.error('Error deleting expense:', error);
             return { success: false, message: error.message || 'Failed to delete expense' };
         }
     }

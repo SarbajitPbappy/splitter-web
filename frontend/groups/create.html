@@ -6,6 +6,7 @@
     <title>Create Group - Splitter</title>
     <link rel="stylesheet" href="/frontend/assets/css/style.css">
     <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="dashboard">
@@ -75,12 +76,12 @@
                 const submitBtn = e.target.querySelector('button[type="submit"]');
                 
                 if (!name) {
-                    Utils.showError('Group name is required');
+                    await Utils.showError('Group name is required');
                     return;
                 }
                 
                 if (!type) {
-                    Utils.showError('Please select a group type');
+                    await Utils.showError('Please select a group type');
                     return;
                 }
                 
@@ -94,16 +95,16 @@
                     });
                     
                     if (result.success) {
-                        Utils.showSuccess('Group created successfully!');
+                        await Utils.showSuccess('Group created successfully!');
                         setTimeout(() => {
                             window.location.href = `/frontend/groups/details.html?id=${result.group.group_id}`;
-                        }, 1000);
+                        }, 2000);
                     } else {
-                        Utils.showError(result.message || 'Failed to create group');
+                        await Utils.showError(result.message || 'Failed to create group');
                         Utils.hideLoading(submitBtn);
                     }
                 } catch (error) {
-                    Utils.showError(error.message || 'An error occurred');
+                    await Utils.showError(error.message || 'An error occurred');
                     Utils.hideLoading(submitBtn);
                 }
             });

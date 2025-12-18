@@ -34,7 +34,11 @@ try {
     $groupId = $group->acceptInvitation($sanitized['token'], $userId);
     
     $groupData = $group->getById($groupId);
-    sendSuccess($groupData, 'Invitation accepted successfully');
+    // Ensure group_id is explicitly included in response
+    sendSuccess([
+        'group_id' => $groupId,
+        'group' => $groupData
+    ], 'Invitation accepted successfully');
 } catch (Exception $e) {
     logError($e->getMessage(), ['endpoint' => 'accept_invitation']);
     sendError($e->getMessage(), 400);

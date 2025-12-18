@@ -6,6 +6,7 @@
     <title>Add Expense - Splitter</title>
     <link rel="stylesheet" href="/frontend/assets/css/style.css">
     <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="dashboard">
@@ -106,7 +107,7 @@
             // Load group details
             const group = await Groups.getGroup(groupId);
             if (!group) {
-                Utils.showError('Group not found');
+                await Utils.showError('Group not found');
                 window.location.href = '/frontend/groups/list.html';
                 return;
             }
@@ -194,7 +195,7 @@
                 });
                 
                 if (Math.abs(total - amount) > 0.01) {
-                    Utils.showError(`Split amounts must equal the total amount (${Utils.formatCurrency(total)} ≠ ${Utils.formatCurrency(amount)})`);
+                    await Utils.showError(`Split amounts must equal the total amount (${Utils.formatCurrency(total)} ≠ ${Utils.formatCurrency(amount)})`);
                     return;
                 }
             } else if (splitType === 'Shares') {
@@ -224,16 +225,16 @@
                 const result = await Expenses.createExpense(expenseData, receiptFile);
                 
                 if (result.success) {
-                    Utils.showSuccess('Expense added successfully!');
+                    await Utils.showSuccess('Expense added successfully!');
                     setTimeout(() => {
                         window.location.href = `/frontend/groups/details.html?id=${groupId}`;
-                    }, 1000);
+                    }, 2000);
                 } else {
-                    Utils.showError(result.message || 'Failed to add expense');
+                    await Utils.showError(result.message || 'Failed to add expense');
                     Utils.hideLoading(submitBtn);
                 }
             } catch (error) {
-                Utils.showError(error.message || 'An error occurred');
+                await Utils.showError(error.message || 'An error occurred');
                 Utils.hideLoading(submitBtn);
             }
         });

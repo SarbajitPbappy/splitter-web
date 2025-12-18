@@ -20,7 +20,6 @@ const Meals = {
             }
             return { success: false, message: response.message };
         } catch (error) {
-            console.error('Error adding meal:', error);
             return { success: false, message: error.message || 'Failed to add meal' };
         }
     },
@@ -36,7 +35,6 @@ const Meals = {
             });
             return response.success ? response.data : [];
         } catch (error) {
-            console.error('Error fetching meals:', error);
             return [];
         }
     },
@@ -52,7 +50,6 @@ const Meals = {
             });
             return response.success ? response.data : null;
         } catch (error) {
-            console.error('Error calculating meal costs:', error);
             return null;
         }
     },
@@ -62,12 +59,34 @@ const Meals = {
      */
     async recordMarketExpense(groupId, monthYear, totalAmount) {
         try {
-            // Note: This endpoint would need to be created in the backend
-            // For now, this is a placeholder
-            return { success: false, message: 'Feature not yet implemented' };
+            const response = await API.post('/meals/market_expense.php', {
+                group_id: groupId,
+                month_year: monthYear,
+                total_amount: totalAmount
+            });
+            if (response.success) {
+                return { success: true };
+            }
+            return { success: false, message: response.message };
         } catch (error) {
-            console.error('Error recording market expense:', error);
-            return { success: false, message: error.message };
+            return { success: false, message: error.message || 'Failed to record market expense' };
+        }
+    },
+    
+    /**
+     * Delete meal entry
+     */
+    async deleteMeal(mealId) {
+        try {
+            const response = await API.delete('/meals/delete.php', {
+                meal_id: mealId
+            });
+            if (response.success) {
+                return { success: true };
+            }
+            return { success: false, message: response.message };
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to delete meal' };
         }
     }
 };

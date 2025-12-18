@@ -43,13 +43,28 @@ class Group {
      */
     public function getById($groupId) {
         $stmt = $this->db->prepare("
-            SELECT g.*, u.name as creator_name, u.email as creator_email
+            SELECT g.*, 
+                   u.name as creator_name, 
+                   u.email as creator_email,
+                   COALESCE(expense_totals.total_amount, 0) as total_amount
             FROM `groups` g
             LEFT JOIN `users` u ON g.creator_id = u.user_id
+            LEFT JOIN (
+                SELECT group_id, SUM(amount) as total_amount
+                FROM `expenses`
+                GROUP BY group_id
+            ) expense_totals ON g.group_id = expense_totals.group_id
             WHERE g.group_id = ?
         ");
         $stmt->execute([$groupId]);
-        return $stmt->fetch();
+        $group = $stmt->fetch();
+        
+        // Convert total_amount to float
+        if ($group) {
+            $group['total_amount'] = (float) $group['total_amount'];
+        }
+        
+        return $group;
     }
     
     /**
@@ -57,15 +72,29 @@ class Group {
      */
     public function getUserGroups($userId) {
         $stmt = $this->db->prepare("
-            SELECT g.*, u.name as creator_name
+            SELECT g.*, 
+                   u.name as creator_name,
+                   COALESCE(expense_totals.total_amount, 0) as total_amount
             FROM `groups` g
             INNER JOIN `group_members` gm ON g.group_id = gm.group_id
             LEFT JOIN `users` u ON g.creator_id = u.user_id
+            LEFT JOIN (
+                SELECT group_id, SUM(amount) as total_amount
+                FROM `expenses`
+                GROUP BY group_id
+            ) expense_totals ON g.group_id = expense_totals.group_id
             WHERE gm.user_id = ?
             ORDER BY g.updated_at DESC
         ");
         $stmt->execute([$userId]);
-        return $stmt->fetchAll();
+        $groups = $stmt->fetchAll();
+        
+        // Convert total_amount to float for each group
+        foreach ($groups as &$group) {
+            $group['total_amount'] = (float) $group['total_amount'];
+        }
+        
+        return $groups;
     }
     
     /**
@@ -289,6 +318,35 @@ class Group {
         ");
         $stmt->execute([$token]);
         return $stmt->fetch();
+    }
+    
+    /**
+     * Get pending invitations for a user by email
+     */
+    public function getPendingInvitationsByEmail($email) {
+        $stmt = $this->db->prepare("
+            SELECT gi.*, g.name as group_name, g.description as group_description, 
+                   g.type as group_type, u.name as inviter_name, u.email as inviter_email
+            FROM `group_invitations` gi
+            INNER JOIN `groups` g ON gi.group_id = g.group_id
+            INNER JOIN `users` u ON gi.invited_by = u.user_id
+            WHERE gi.email = ? AND gi.status = 'Pending' AND gi.expires_at > NOW()
+            ORDER BY gi.created_at DESC
+        ");
+        $stmt->execute([$email]);
+        return $stmt->fetchAll();
+    }
+    
+    /**
+     * Get pending invitations for a user by user ID
+     */
+    public function getPendingInvitationsByUserId($userId) {
+        $user = new User();
+        $userData = $user->getById($userId);
+        if (!$userData) {
+            return [];
+        }
+        return $this->getPendingInvitationsByEmail($userData['email']);
     }
     
     /**

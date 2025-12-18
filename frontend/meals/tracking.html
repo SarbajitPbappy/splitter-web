@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/frontend/assets/css/style.css">
     <link rel="stylesheet" href="/frontend/assets/css/components.css">
     <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="dashboard">
@@ -64,8 +65,9 @@
             </div>
 
             <div class="card" style="margin-bottom: var(--spacing-lg);">
-                <div class="card-header">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h3 class="card-title">Monthly Calculations</h3>
+                    <button id="recordMarketExpenseBtn" class="btn btn-outline btn-sm" style="display: none;">Record Market Expense</button>
                 </div>
                 <div class="card-body" id="calculations">
                     <p style="text-align: center; color: var(--text-secondary);">Select a month to view calculations</p>
@@ -102,10 +104,17 @@
                 return;
             }
             
-            // Load group name
+            // Load group name and check if closed
             const group = await Groups.getGroup(groupId);
             if (group) {
                 document.getElementById('groupTitle').textContent = `${group.name} - Meal Tracking`;
+                const isClosed = group.is_closed == 1 || group.is_closed === true;
+                
+                // Hide form if group is closed
+                if (isClosed) {
+                    document.getElementById('mealForm').parentElement.parentElement.style.display = 'none';
+                    document.getElementById('addMealBtn').style.display = 'none';
+                }
             }
             
             await loadMealsAndCalculations();
@@ -127,31 +136,84 @@
             
             Utils.showLoading(submitBtn);
             
-            const result = await Meals.addMeal(groupId, mealDate, mealType, mealCategory);
-            
-            if (result.success) {
-                Utils.showSuccess('Meal added successfully!');
-                document.getElementById('mealForm').reset();
-                document.getElementById('meal_date').value = Utils.formatDate(new Date());
-                await loadMealsAndCalculations();
-            } else {
-                Utils.showError(result.message || 'Failed to add meal');
+            try {
+                const result = await Meals.addMeal(groupId, mealDate, mealType, mealCategory);
+                
+                if (result.success) {
+                    await Utils.showSuccess('Meal added successfully!');
+                    document.getElementById('mealForm').reset();
+                    document.getElementById('meal_date').value = Utils.formatDate(new Date());
+                    await loadMealsAndCalculations();
+                } else {
+                    await Utils.showError(result.message || 'Failed to add meal');
+                }
+            } catch (error) {
+                await Utils.showError(error.message || 'Failed to add meal');
             }
             
             Utils.hideLoading(submitBtn);
         });
         
         async function loadMealsAndCalculations() {
+            // Load group info to check if closed
+            const group = await Groups.getGroup(groupId);
+            const isClosed = group && (group.is_closed == 1 || group.is_closed === true);
+            
+            // Show/hide market expense button based on group status
+            const marketExpenseBtn = document.getElementById('recordMarketExpenseBtn');
+            marketExpenseBtn.style.display = isClosed ? 'none' : 'block';
+            marketExpenseBtn.onclick = () => showMarketExpenseModal();
+            
             // Load calculations
             const calculations = await Meals.calculateMealCosts(groupId, currentMonth);
-            renderCalculations(calculations);
+            renderCalculations(calculations, isClosed);
             
             // Load meals
             const meals = await Meals.getMeals(groupId, currentMonth);
-            renderMealHistory(meals);
+            renderMealHistory(meals, isClosed);
         }
         
-        function renderCalculations(data) {
+        async function showMarketExpenseModal() {
+            const { value: amount } = await Swal.fire({
+                title: 'Record Market Expense',
+                text: `Enter total market expense for ${currentMonth}`,
+                input: 'number',
+                inputLabel: 'Amount (৳)',
+                inputPlaceholder: 'Enter amount',
+                inputAttributes: {
+                    min: '0.01',
+                    step: '0.01'
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Record',
+                cancelButtonText: 'Cancel',
+                inputValidator: (value) => {
+                    if (!value || parseFloat(value) <= 0) {
+                        return 'Please enter a valid amount greater than 0';
+                    }
+                }
+            });
+            
+            if (amount) {
+                await recordMarketExpense(parseFloat(amount));
+            }
+        }
+        
+        async function recordMarketExpense(amount) {
+            try {
+                const result = await Meals.recordMarketExpense(groupId, currentMonth, amount);
+                if (result.success) {
+                    await Utils.showSuccess('Market expense recorded successfully!');
+                    await loadMealsAndCalculations();
+                } else {
+                    await Utils.showError(result.message || 'Failed to record market expense');
+                }
+            } catch (error) {
+                await Utils.showError(error.message || 'Failed to record market expense');
+            }
+        }
+        
+        function renderCalculations(data, isClosed) {
             const container = document.getElementById('calculations');
             
             if (!data || !data.user_balances) {
@@ -159,12 +221,22 @@
                 return;
             }
             
+            const marketExpenseDisplay = data.total_market_expense > 0 
+                ? Utils.formatCurrency(data.total_market_expense)
+                : '<span style="color: var(--text-secondary); font-size: 0.9em;">Not recorded</span>';
+            
             container.innerHTML = `
                 <div style="margin-bottom: var(--spacing-lg);">
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--spacing-md); margin-bottom: var(--spacing-md);">
                         <div>
                             <div class="stat-label">Total Market Expense</div>
-                            <div class="stat-value">${Utils.formatCurrency(data.total_market_expense || 0)}</div>
+                            <div class="stat-value">${marketExpenseDisplay}</div>
+                            ${data.total_market_expense == 0 ? '<p style="font-size: 0.85em; color: var(--text-secondary); margin-top: 4px;">Record to calculate meal costs</p>' : ''}
+                        </div>
+                        <div>
+                            <div class="stat-label">Total Contributions</div>
+                            <div class="stat-value">${Utils.formatCurrency(data.total_contributions || 0)}</div>
+                            <p style="font-size: 0.85em; color: var(--text-secondary); margin-top: 4px;">From expenses (auto)</p>
                         </div>
                         <div>
                             <div class="stat-label">Total Meals</div>
@@ -175,6 +247,12 @@
                             <div class="stat-value">${Utils.formatCurrency(data.cost_per_meal || 0)}</div>
                         </div>
                     </div>
+                    <div style="background: var(--bg-light); padding: var(--spacing-md); border-radius: 4px; margin-top: var(--spacing-md);">
+                        <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">
+                            <strong>Note:</strong> Contributions are automatically calculated from expenses paid by each person in this month. 
+                            Each expense adds to the payer's contribution amount.
+                        </p>
+                    </div>
                 </div>
                 <h4 style="margin-bottom: var(--spacing-md);">Member Balances</h4>
                 <div style="overflow-x: auto;">
@@ -184,17 +262,26 @@
                                 <th style="padding: var(--spacing-sm); text-align: left;">Member</th>
                                 <th style="padding: var(--spacing-sm); text-align: right;">Meals Eaten</th>
                                 <th style="padding: var(--spacing-sm); text-align: right;">Total Owed</th>
-                                <th style="padding: var(--spacing-sm); text-align: right;">Contribution</th>
+                                <th style="padding: var(--spacing-sm); text-align: right;">
+                                    Contribution
+                                    <span style="font-weight: normal; font-size: 0.85em; color: var(--text-secondary);">(from expenses)</span>
+                                </th>
                                 <th style="padding: var(--spacing-sm); text-align: right;">Balance</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${data.user_balances.map(balance => `
                                 <tr style="border-bottom: 1px solid var(--border-color);">
-                                    <td style="padding: var(--spacing-sm);">${Utils.escapeHtml(balance.name)}</td>
+                                    <td style="padding: var(--spacing-sm);">
+                                        ${Utils.escapeHtml(balance.name)}
+                                        ${balance.expense_count > 0 ? `<span style="font-size: 0.8em; color: var(--text-secondary);">(${balance.expense_count} expense${balance.expense_count > 1 ? 's' : ''})</span>` : ''}
+                                    </td>
                                     <td style="padding: var(--spacing-sm); text-align: right;">${balance.meals_eaten}</td>
                                     <td style="padding: var(--spacing-sm); text-align: right;">${Utils.formatCurrency(balance.total_owed)}</td>
-                                    <td style="padding: var(--spacing-sm); text-align: right;">${Utils.formatCurrency(balance.contribution)}</td>
+                                    <td style="padding: var(--spacing-sm); text-align: right;">
+                                        ${Utils.formatCurrency(balance.contribution)}
+                                        ${balance.contribution > 0 ? '<span style="font-size: 0.85em; color: var(--success-color);">✓</span>' : ''}
+                                    </td>
                                     <td style="padding: var(--spacing-sm); text-align: right; font-weight: 600; color: ${balance.balance >= 0 ? 'var(--success-color)' : 'var(--error-color)'};">
                                         ${Utils.formatCurrency(balance.balance)}
                                     </td>
@@ -206,8 +293,10 @@
             `;
         }
         
-        function renderMealHistory(meals) {
+        async function renderMealHistory(meals, isClosed) {
             const container = document.getElementById('mealHistory');
+            const user = Auth.getUser();
+            const currentUserId = user ? user.user_id : null;
             
             if (!meals || meals.length === 0) {
                 container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No meals recorded for this month</p>';
@@ -227,17 +316,54 @@
             container.innerHTML = Object.keys(mealsByDate).sort().reverse().map(date => `
                 <div style="margin-bottom: var(--spacing-md); padding-bottom: var(--spacing-md); border-bottom: 1px solid var(--border-color);">
                     <h4 style="margin-bottom: var(--spacing-sm);">${Utils.formatDate(date, 'full')}</h4>
-                    ${mealsByDate[date].map(meal => `
+                    ${mealsByDate[date].map(meal => {
+                        const canDelete = !isClosed && currentUserId && meal.user_id == currentUserId;
+                        return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-xs) 0;">
                             <span>
                                 <span class="badge badge-primary" style="margin-right: var(--spacing-sm);">${meal.meal_type}</span>
                                 <span class="badge badge-secondary">${meal.meal_category}</span>
                                 <span style="margin-left: var(--spacing-md);">${Utils.escapeHtml(meal.user_name)}</span>
                             </span>
+                            ${canDelete ? `
+                                <button class="btn btn-outline btn-sm delete-meal-btn" data-meal-id="${meal.meal_id}" style="padding: 2px 8px; font-size: 0.85em;">
+                                    Delete
+                                </button>
+                            ` : ''}
                         </div>
-                    `).join('')}
+                    `;
+                    }).join('')}
                 </div>
             `).join('');
+            
+            // Add delete event listeners
+            if (!isClosed) {
+                container.querySelectorAll('.delete-meal-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const mealId = parseInt(e.target.dataset.mealId);
+                        await deleteMeal(mealId);
+                    });
+                });
+            }
+        }
+        
+        async function deleteMeal(mealId) {
+            const confirmed = await Utils.confirmDelete('this meal entry');
+            if (!confirmed) {
+                return;
+            }
+            
+            try {
+                const result = await Meals.deleteMeal(mealId);
+                if (result.success) {
+                    await Utils.showSuccess('Meal deleted successfully!');
+                    await loadMealsAndCalculations();
+                } else {
+                    await Utils.showError(result.message || 'Failed to delete meal');
+                }
+            } catch (error) {
+                await Utils.showError(error.message || 'Failed to delete meal');
+            }
         }
     </script>
 </body>

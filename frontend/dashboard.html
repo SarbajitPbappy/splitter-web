@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/frontend/assets/css/style.css">
     <link rel="stylesheet" href="/frontend/assets/css/components.css">
     <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="dashboard">
@@ -38,6 +39,16 @@
                 </div>
             </div>
 
+            <!-- Pending Invitations Section -->
+            <div id="invitationsSection" style="margin-bottom: var(--spacing-xl); display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                    <h2 class="section-title" style="margin: 0;">Pending Invitations</h2>
+                </div>
+                <div class="groups-grid" id="invitationsGrid">
+                    <!-- Invitations will be loaded here -->
+                </div>
+            </div>
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg);">
                 <h2 class="section-title" style="margin: 0;">Your Groups</h2>
                 <a href="/frontend/groups/create.html" class="btn btn-primary">Create Group</a>
@@ -62,10 +73,8 @@
         // Require authentication
         (async function() {
             const authenticated = await Auth.requireAuth();
-            console.log('Dashboard auth check:', authenticated);
             
             if (!authenticated) {
-                console.log('Not authenticated, redirecting to login');
                 return;
             }
             
@@ -82,8 +91,26 @@
                         document.getElementById('userName').textContent = response.data.name;
                     }
                 } catch (error) {
-                    console.error('Error loading user profile:', error);
+                    // Silently fail - user can still use the dashboard
                 }
+            }
+            
+            // Load pending invitations
+            try {
+                const invitations = await Groups.getPendingInvitations();
+                
+                if (invitations.length > 0) {
+                    const section = document.getElementById('invitationsSection');
+                    const grid = document.getElementById('invitationsGrid');
+                    section.style.display = 'block';
+                    grid.innerHTML = '';
+                    
+                    invitations.forEach(invitation => {
+                        grid.appendChild(Groups.renderInvitationCard(invitation));
+                    });
+                }
+            } catch (error) {
+                // Silently fail - invitations section will remain hidden
             }
             
             // Load groups
@@ -103,7 +130,7 @@
                     document.getElementById('activeGroups').textContent = groups.filter(g => !g.is_closed).length;
                 }
             } catch (error) {
-                console.error('Error loading groups:', error);
+                // Silently fail - empty state will be shown
             }
         })();
     </script>

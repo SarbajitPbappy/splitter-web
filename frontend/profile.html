@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/frontend/assets/css/style.css">
     <link rel="stylesheet" href="/frontend/assets/css/components.css">
     <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="dashboard">
@@ -72,8 +73,7 @@
                     document.getElementById('email').value = user.email || '';
                 }
             } catch (error) {
-                console.error('Error loading profile:', error);
-                Utils.showError('Failed to load profile');
+                await Utils.showError('Failed to load profile');
             }
             
             // Handle form submission
@@ -85,12 +85,12 @@
                 const submitBtn = e.target.querySelector('button[type="submit"]');
                 
                 if (!name) {
-                    Utils.showError('Name is required');
+                    await Utils.showError('Name is required');
                     return;
                 }
                 
                 if (password && !Utils.validatePassword(password)) {
-                    Utils.showError('Password must be at least 8 characters with uppercase, lowercase, and number');
+                    await Utils.showError('Password must be at least 8 characters with uppercase, lowercase, and number');
                     return;
                 }
                 
@@ -105,14 +105,14 @@
                     const response = await API.put('/users/update_profile.php', updateData);
                     
                     if (response.success) {
-                        Utils.showSuccess('Profile updated successfully!');
+                        await Utils.showSuccess('Profile updated successfully!');
                         // Update user data in auth
                         Auth.setUser(response.data);
                     } else {
-                        Utils.showError(response.message || 'Failed to update profile');
+                        await Utils.showError(response.message || 'Failed to update profile');
                     }
                 } catch (error) {
-                    Utils.showError(error.message || 'An error occurred');
+                    await Utils.showError(error.message || 'An error occurred');
                 }
                 
                 Utils.hideLoading(submitBtn);
