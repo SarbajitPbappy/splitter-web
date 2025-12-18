@@ -7,5 +7,6 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'Splitter\\' => array($baseDir . '/backend/classes'),
+    'PHPMailer\\PHPMailer\\' => array($vendorDir . '/phpmailer/phpmailer/src'),
     'Firebase\\JWT\\' => array($vendorDir . '/firebase/php-jwt/src'),
 );
