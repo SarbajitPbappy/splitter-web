@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expenses - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg);">
+                <h2 class="section-title" style="margin: 0;" id="groupTitle">Expenses</h2>
+                <a href="#" id="addExpenseLink" class="btn btn-primary">Add Expense</a>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <div id="expensesList">
+                        <p style="text-align: center; color: var(--text-secondary);">Loading expenses...</p>
+                    </div>
+                    <div id="pagination" style="margin-top: var(--spacing-lg); display: none;"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script src="/frontend/assets/js/groups.js"></script>
+    <script src="/frontend/assets/js/expenses.js"></script>
+    <script>
+        let groupId = Utils.getURLParam('group_id');
+        let currentPage = 1;
+        
+        Auth.requireAuth().then(async (authenticated) => {
+            if (!authenticated || !groupId) {
+                window.location.href = '/frontend/groups/list.html';
+                return;
+            }
+            
+            // Load group name
+            const group = await Groups.getGroup(groupId);
+            if (group) {
+                document.getElementById('groupTitle').textContent = `${group.name} - Expenses`;
+                document.getElementById('addExpenseLink').href = `/frontend/expenses/add.html?group_id=${groupId}`;
+            }
+            
+            await loadExpenses();
+        });
+        
+        async function loadExpenses(page = 1) {
+            currentPage = page;
+            const data = await Expenses.getExpenses(groupId, page, 20);
+            const expenses = data.expenses || [];
+            
+            const container = document.getElementById('expensesList');
+            const pagination = document.getElementById('pagination');
+            
+            if (expenses.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No expenses found</p>';
+                pagination.style.display = 'none';
+                return;
+            }
+            
+            container.innerHTML = expenses.map(expense => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-md) 0; border-bottom: 1px solid var(--border-color);">
+                    <div style="flex: 1;">
+                        <strong style="display: block; margin-bottom: var(--spacing-xs);">${Utils.escapeHtml(expense.description || 'No description')}</strong>
+                        <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">
+                            Paid by ${Utils.escapeHtml(expense.paid_by_name)} on ${Utils.formatDate(expense.expense_date, 'full')}
+                        </div>
+                        ${expense.receipt_image ? `<div style="margin-top: var(--spacing-xs);"><small>Receipt attached</small></div>` : ''}
+                    </div>
+                    <div style="text-align: right; margin-left: var(--spacing-lg);">
+                        <div style="font-size: var(--font-size-xl); font-weight: 600; color: var(--primary-color);">
+                            ${Utils.formatCurrency(expense.amount)}
+                        </div>
+                        <div style="font-size: var(--font-size-sm); color: var(--text-secondary); margin-top: var(--spacing-xs);">
+                            ${expense.split_type} split
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Pagination
+            if (data.total_pages > 1) {
+                pagination.style.display = 'flex';
+                pagination.style.justifyContent = 'center';
+                pagination.style.gap = 'var(--spacing-sm)';
+                
+                let paginationHTML = '';
+                if (page > 1) {
+                    paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadExpenses(${page - 1})">Previous</button>`;
+                }
+                paginationHTML += `<span style="padding: var(--spacing-sm);">Page ${page} of ${data.total_pages}</span>`;
+                if (page < data.total_pages) {
+                    paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadExpenses(${page + 1})">Next</button>`;
+                }
+                pagination.innerHTML = paginationHTML;
+            } else {
+                pagination.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
+

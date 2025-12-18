@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Invitation - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+</head>
+<body>
+    <div class="container" style="max-width: 600px; margin: 50px auto; padding: var(--spacing-lg);">
+        <div class="card">
+            <div id="loading" style="text-align: center; padding: var(--spacing-xl);">
+                <div class="spinner"></div>
+                <p style="margin-top: var(--spacing-md);">Loading invitation...</p>
+            </div>
+            
+            <div id="invitationContent" style="display: none;">
+                <h1 style="text-align: center; margin-bottom: var(--spacing-lg);">Group Invitation</h1>
+                <div id="invitationDetails"></div>
+                <div id="actionButtons" style="margin-top: var(--spacing-xl); text-align: center; display: flex; gap: var(--spacing-md); justify-content: center;">
+                    <button id="acceptBtn" class="btn btn-primary">Accept Invitation</button>
+                    <button id="rejectBtn" class="btn btn-danger">Reject</button>
+                </div>
+            </div>
+            
+            <div id="message" style="display: none; text-align: center; padding: var(--spacing-lg);"></div>
+        </div>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script>
+        // Get token from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        const action = urlParams.get('action'); // 'accept' or 'reject'
+        
+        if (!token) {
+            showError('Invalid invitation link. No token provided.');
+            return;
+        }
+        
+        // Check if user is authenticated
+        const isAuthenticated = Auth.isAuthenticated();
+        
+        async function loadInvitation() {
+            try {
+                const response = await fetch(`/backend/api/groups/get_invitation.php?token=${encodeURIComponent(token)}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayInvitation(result.data);
+                } else {
+                    showError(result.message || 'Failed to load invitation');
+                }
+            } catch (error) {
+                console.error('Error loading invitation:', error);
+                showError('Failed to load invitation. Please try again.');
+            }
+        }
+        
+        function displayInvitation(invitation) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('invitationContent').style.display = 'block';
+            
+            const detailsHtml = `
+                <div style="text-align: center; margin-bottom: var(--spacing-lg);">
+                    <p style="font-size: var(--font-size-lg); margin-bottom: var(--spacing-md);">
+                        <strong>${Utils.escapeHtml(invitation.inviter_name)}</strong> has invited you to join
+                    </p>
+                    <h2 style="color: var(--primary-color); margin: var(--spacing-md) 0;">
+                        ${Utils.escapeHtml(invitation.group_name)}
+                    </h2>
+                    <p style="color: var(--text-secondary); margin-top: var(--spacing-md);">
+                        Invitation expires: ${Utils.formatDate(invitation.expires_at)}
+                    </p>
+                </div>
+            `;
+            
+            document.getElementById('invitationDetails').innerHTML = detailsHtml;
+            
+            // If action is specified in URL (from email link), handle it
+            if (action === 'accept') {
+                handleAccept();
+            } else if (action === 'reject') {
+                handleReject();
+            }
+        }
+        
+        async function handleAccept() {
+            if (!isAuthenticated) {
+                // Redirect to login first
+                Utils.showInfo('Please log in to accept the invitation.');
+                window.location.href = `/frontend/login.html?redirect=${encodeURIComponent(window.location.href)}`;
+                return;
+            }
+            
+            document.getElementById('actionButtons').style.display = 'none';
+            Utils.showLoading(document.getElementById('invitationContent'));
+            
+            try {
+                const result = await API.post('/groups/accept_invitation.php', { token: token });
+                
+                if (result.success) {
+                    Utils.showSuccess('Invitation accepted! Redirecting to group...');
+                    setTimeout(() => {
+                        window.location.href = `/frontend/groups/details.html?id=${result.data.group_id}`;
+                    }, 1500);
+                } else {
+                    Utils.showError(result.message || 'Failed to accept invitation');
+                    document.getElementById('actionButtons').style.display = 'flex';
+                    Utils.hideLoading();
+                }
+            } catch (error) {
+                console.error('Error accepting invitation:', error);
+                Utils.showError(error.message || 'Failed to accept invitation');
+                document.getElementById('actionButtons').style.display = 'flex';
+                Utils.hideLoading();
+            }
+        }
+        
+        async function handleReject() {
+            if (!isAuthenticated) {
+                Utils.showInfo('Please log in to reject the invitation.');
+                window.location.href = `/frontend/login.html?redirect=${encodeURIComponent(window.location.href)}`;
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to reject this invitation?')) {
+                return;
+            }
+            
+            document.getElementById('actionButtons').style.display = 'none';
+            Utils.showLoading(document.getElementById('invitationContent'));
+            
+            try {
+                const result = await API.post('/groups/reject_invitation.php', { token: token });
+                
+                if (result.success) {
+                    Utils.showSuccess('Invitation rejected.');
+                    setTimeout(() => {
+                        window.location.href = '/frontend/dashboard.html';
+                    }, 1500);
+                } else {
+                    Utils.showError(result.message || 'Failed to reject invitation');
+                    document.getElementById('actionButtons').style.display = 'flex';
+                    Utils.hideLoading();
+                }
+            } catch (error) {
+                console.error('Error rejecting invitation:', error);
+                Utils.showError(error.message || 'Failed to reject invitation');
+                document.getElementById('actionButtons').style.display = 'flex';
+                Utils.hideLoading();
+            }
+        }
+        
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('invitationContent').style.display = 'none';
+            const messageDiv = document.getElementById('message');
+            messageDiv.style.display = 'block';
+            messageDiv.innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error:</strong> ${Utils.escapeHtml(message)}
+                </div>
+                <p style="margin-top: var(--spacing-md);">
+                    <a href="/frontend/dashboard.html" class="btn btn-primary">Go to Dashboard</a>
+                </p>
+            `;
+        }
+        
+        // Attach event listeners
+        document.getElementById('acceptBtn').addEventListener('click', handleAccept);
+        document.getElementById('rejectBtn').addEventListener('click', handleReject);
+        
+        // Load invitation on page load
+        loadInvitation();
+    </script>
+</body>
+</html>
+

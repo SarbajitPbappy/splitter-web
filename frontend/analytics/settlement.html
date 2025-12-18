@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settlement - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg);">
+                <h2 class="section-title" style="margin: 0;" id="groupTitle">Settlement</h2>
+                <a href="#" id="analyticsLink" class="btn btn-secondary">View Analytics</a>
+            </div>
+
+            <div class="card" style="margin-bottom: var(--spacing-lg);">
+                <div class="card-header">
+                    <h3 class="card-title">Member Balances</h3>
+                </div>
+                <div class="card-body" id="balancesContent">
+                    <p style="text-align: center; color: var(--text-secondary);">Loading...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Settlement Transactions</h3>
+                    <p style="margin: var(--spacing-sm) 0 0 0; font-size: var(--font-size-sm); color: var(--text-secondary);">
+                        These are the optimized transactions needed to settle all balances
+                    </p>
+                </div>
+                <div class="card-body" id="settlementsContent">
+                    <p style="text-align: center; color: var(--text-secondary);">Loading...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script src="/frontend/assets/js/groups.js"></script>
+    <script src="/frontend/assets/js/analytics.js"></script>
+    <script>
+        let groupId = Utils.getURLParam('group_id');
+        
+        Auth.requireAuth().then(async (authenticated) => {
+            if (!authenticated || !groupId) {
+                window.location.href = '/frontend/groups/list.html';
+                return;
+            }
+            
+            // Set link
+            document.getElementById('analyticsLink').href = `/frontend/analytics/dashboard.html?group_id=${groupId}`;
+            
+            // Load group name
+            const group = await Groups.getGroup(groupId);
+            if (group) {
+                document.getElementById('groupTitle').textContent = `${group.name} - Settlement`;
+            }
+            
+            await loadSettlement();
+        });
+        
+        async function loadSettlement() {
+            const data = await Analytics.getSettlement(groupId);
+            
+            if (!data) {
+                document.getElementById('balancesContent').innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Failed to load settlement data</p>';
+                return;
+            }
+            
+            // Render balances
+            const balances = data.balances || [];
+            const balancesContainer = document.getElementById('balancesContent');
+            
+            if (balances.length === 0) {
+                balancesContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No balance data available</p>';
+            } else {
+                balancesContainer.innerHTML = `
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid var(--border-color);">
+                                    <th style="padding: var(--spacing-sm); text-align: left;">Member</th>
+                                    <th style="padding: var(--spacing-sm); text-align: right;">Paid</th>
+                                    <th style="padding: var(--spacing-sm); text-align: right;">Owed</th>
+                                    <th style="padding: var(--spacing-sm); text-align: right;">Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${balances.map(balance => {
+                                    const balanceAmount = parseFloat(balance.balance || 0);
+                                    const balanceColor = balanceAmount > 0 ? 'var(--success-color)' : balanceAmount < 0 ? 'var(--error-color)' : 'var(--text-primary)';
+                                    return `
+                                        <tr style="border-bottom: 1px solid var(--border-color);">
+                                            <td style="padding: var(--spacing-sm);">${Utils.escapeHtml(balance.name)}</td>
+                                            <td style="padding: var(--spacing-sm); text-align: right;">${Utils.formatCurrency(balance.paid || 0)}</td>
+                                            <td style="padding: var(--spacing-sm); text-align: right;">${Utils.formatCurrency(balance.owed || 0)}</td>
+                                            <td style="padding: var(--spacing-sm); text-align: right; font-weight: 600; color: ${balanceColor};">
+                                                ${Utils.formatCurrency(balanceAmount)}
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+            // Render settlements
+            const settlements = data.settlements || [];
+            const settlementsContainer = document.getElementById('settlementsContent');
+            
+            if (settlements.length === 0) {
+                settlementsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">All balances are settled! No transactions needed.</p>';
+            } else {
+                settlementsContainer.innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+                        ${settlements.map(settlement => `
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--spacing-md); background-color: var(--bg-secondary); border-radius: var(--border-radius);">
+                                <div style="flex: 1;">
+                                    <strong style="color: var(--error-color);">${Utils.escapeHtml(settlement.from_name)}</strong>
+                                    <span style="margin: 0 var(--spacing-sm);">owes</span>
+                                    <strong style="color: var(--success-color);">${Utils.escapeHtml(settlement.to_name)}</strong>
+                                </div>
+                                <div style="font-size: var(--font-size-lg); font-weight: 600; color: var(--primary-color);">
+                                    ${Utils.formatCurrency(settlement.amount)}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
+

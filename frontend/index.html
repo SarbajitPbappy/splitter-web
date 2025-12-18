@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Splitter - Expense Splitting App</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script>
+        // Redirect to dashboard if authenticated, otherwise to login
+        if (Auth.isAuthenticated()) {
+            window.location.href = '/frontend/dashboard.html';
+        } else {
+            window.location.href = '/frontend/login.html';
+        }
+    </script>
+</head>
+<body>
+    <div class="container" style="text-align: center; margin-top: 5rem;">
+        <p>Redirecting...</p>
+    </div>
+</body>
+</html>
+

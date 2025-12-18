@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+</head>
+<body>
+    <div class="container" style="max-width: 400px; margin-top: 5rem;">
+        <div class="card">
+            <div class="card-header" style="text-align: center;">
+                <h1 style="margin: 0;">Create Account</h1>
+                <p style="margin: var(--spacing-sm) 0 0 0; color: var(--text-secondary);">Sign up for Splitter</p>
+            </div>
+            <div class="card-body">
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="name" class="form-label required">Full Name</label>
+                        <input type="text" id="name" class="form-input" required autocomplete="name">
+                    </div>
+                    <div class="form-group">
+                        <label for="email" class="form-label required">Email</label>
+                        <input type="email" id="email" class="form-input" required autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="password" class="form-label required">Password</label>
+                        <input type="password" id="password" class="form-input" required autocomplete="new-password">
+                        <div class="form-help">Must be at least 8 characters with uppercase, lowercase, and number</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword" class="form-label required">Confirm Password</label>
+                        <input type="password" id="confirmPassword" class="form-input" required autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary btn-block">Create Account</button>
+                    </div>
+                </form>
+                <div style="text-align: center; margin-top: var(--spacing-lg);">
+                    <p style="color: var(--text-secondary);">Already have an account? <a href="/frontend/login.html">Sign in</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script>
+        // Redirect if already authenticated
+        Auth.redirectIfAuthenticated();
+        
+        // Check for invite token in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const inviteToken = urlParams.get('invite_token');
+        
+        if (inviteToken) {
+            // Show message about invitation
+            const cardHeader = document.querySelector('.card-header');
+            const existingP = cardHeader.querySelector('p');
+            if (existingP) {
+                existingP.innerHTML = 'Sign up to accept the group invitation';
+            }
+        }
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            
+            // Validation
+            if (!name || name.length < 2) {
+                Utils.showError('Name must be at least 2 characters');
+                return;
+            }
+            
+            if (!Utils.validateEmail(email)) {
+                Utils.showError('Please enter a valid email address');
+                return;
+            }
+            
+            if (!Utils.validatePassword(password)) {
+                Utils.showError('Password must be at least 8 characters with uppercase, lowercase, and number');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                Utils.showError('Passwords do not match');
+                return;
+            }
+            
+            Utils.showLoading(submitBtn);
+            
+            try {
+                const result = await Auth.register(name, email, password, inviteToken);
+                
+                if (result.success) {
+                    let redirectUrl = '/frontend/dashboard.html';
+                    
+                    // If there was an invite token and we accepted it, redirect to the group
+                    if (result.group_id) {
+                        redirectUrl = `/frontend/groups/details.html?id=${result.group_id}`;
+                    }
+                    
+                    Utils.showSuccess('Account created successfully! Redirecting...');
+                    setTimeout(() => {
+                        window.location.replace(redirectUrl);
+                    }, 800);
+                } else {
+                    Utils.showError(result.message || 'Registration failed');
+                    Utils.hideLoading(submitBtn);
+                }
+            } catch (error) {
+                Utils.showError(error.message || 'An error occurred during registration');
+                Utils.hideLoading(submitBtn);
+            }
+        });
+    </script>
+</body>
+</html>
+

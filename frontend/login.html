@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+</head>
+<body>
+    <div class="container" style="max-width: 400px; margin-top: 5rem;">
+        <div class="card">
+            <div class="card-header" style="text-align: center;">
+                <h1 style="margin: 0;">Splitter</h1>
+                <p style="margin: var(--spacing-sm) 0 0 0; color: var(--text-secondary);">Sign in to your account</p>
+            </div>
+            <div class="card-body">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" id="email" class="form-input" required autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" id="password" class="form-input" required autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+                    </div>
+                </form>
+                <div style="text-align: center; margin-top: var(--spacing-lg);">
+                    <p style="color: var(--text-secondary);">Don't have an account? <a href="/frontend/register.html">Sign up</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script>
+        // Check for redirect parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectUrl = urlParams.get('redirect') || '/frontend/dashboard.html';
+        
+        // Redirect if already authenticated (but don't block page load)
+        if (Auth.isAuthenticated()) {
+            window.location.href = redirectUrl;
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            
+            if (!email) {
+                Utils.showError('Please enter your email address');
+                return;
+            }
+            
+            if (!password) {
+                Utils.showError('Please enter your password');
+                return;
+            }
+            
+            if (!Utils.validateEmail(email)) {
+                Utils.showError('Please enter a valid email address');
+                return;
+            }
+            
+            Utils.showLoading(submitBtn);
+            submitBtn.disabled = true;
+            
+            try {
+                const result = await Auth.login(email, password);
+                console.log('Login result:', result);
+                
+                if (result && result.success) {
+                    // Verify token was saved
+                    const token = localStorage.getItem('auth_token');
+                    console.log('Token after login:', token ? 'Saved ✓' : 'Not found ✗');
+                    
+                    if (token) {
+                        Utils.showSuccess('Login successful! Redirecting...');
+                        // Small delay to show success message, then redirect
+                        setTimeout(() => {
+                            window.location.href = redirectUrl;
+                        }, 500);
+                    } else {
+                        console.error('Token not saved after login');
+                        Utils.showError('Login succeeded but token was not saved. Please try again.');
+                        Utils.hideLoading(submitBtn);
+                        submitBtn.disabled = false;
+                    }
+                } else {
+                    const errorMsg = result?.message || 'Login failed. Please check your credentials.';
+                    Utils.showError(errorMsg);
+                    Utils.hideLoading(submitBtn);
+                    submitBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Login exception:', error);
+                Utils.showError(error.message || 'An error occurred during login. Please try again.');
+                Utils.hideLoading(submitBtn);
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
+

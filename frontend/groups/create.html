@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Group - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container" style="max-width: 600px; margin-top: var(--spacing-xl);">
+            <h2 class="section-title">Create New Group</h2>
+            
+            <div class="card">
+                <div class="card-body">
+                    <form id="createGroupForm">
+                        <div class="form-group">
+                            <label for="name" class="form-label required">Group Name</label>
+                            <input type="text" id="name" class="form-input" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="type" class="form-label required">Group Type</label>
+                            <select id="type" class="form-select" required>
+                                <option value="">Select type...</option>
+                                <option value="Trip">Trip</option>
+                                <option value="Bachelor Mess">Bachelor Mess</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="description" class="form-label">Description (Optional)</label>
+                            <textarea id="description" class="form-textarea" rows="4"></textarea>
+                        </div>
+                        
+                        <div class="form-group" style="display: flex; gap: var(--spacing-md); margin-top: var(--spacing-xl);">
+                            <button type="submit" class="btn btn-primary">Create Group</button>
+                            <a href="/frontend/groups/list.html" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script src="/frontend/assets/js/groups.js"></script>
+    <script>
+        Auth.requireAuth().then((authenticated) => {
+            if (!authenticated) return;
+            
+            document.getElementById('createGroupForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const name = document.getElementById('name').value.trim();
+                const type = document.getElementById('type').value;
+                const description = document.getElementById('description').value.trim();
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                
+                if (!name) {
+                    Utils.showError('Group name is required');
+                    return;
+                }
+                
+                if (!type) {
+                    Utils.showError('Please select a group type');
+                    return;
+                }
+                
+                Utils.showLoading(submitBtn);
+                
+                try {
+                    const result = await Groups.createGroup({
+                        name: name,
+                        type: type,
+                        description: description
+                    });
+                    
+                    if (result.success) {
+                        Utils.showSuccess('Group created successfully!');
+                        setTimeout(() => {
+                            window.location.href = `/frontend/groups/details.html?id=${result.group.group_id}`;
+                        }, 1000);
+                    } else {
+                        Utils.showError(result.message || 'Failed to create group');
+                        Utils.hideLoading(submitBtn);
+                    }
+                } catch (error) {
+                    Utils.showError(error.message || 'An error occurred');
+                    Utils.hideLoading(submitBtn);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

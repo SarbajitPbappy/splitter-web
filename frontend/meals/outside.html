@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outside Meals - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg);">
+                <h2 class="section-title" style="margin: 0;" id="groupTitle">Outside Meals</h2>
+                <input type="month" id="monthSelector" class="form-input" style="width: auto;" value="${Utils.getCurrentMonth()}">
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <p style="color: var(--text-secondary); margin-bottom: var(--spacing-lg);">
+                        Track outside meal expenses and view monthly distribution across group members.
+                    </p>
+                    <div id="outsideMealsContent">
+                        <p style="text-align: center; color: var(--text-secondary);">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script src="/frontend/assets/js/groups.js"></script>
+    <script src="/frontend/assets/js/meals.js"></script>
+    <script>
+        let groupId = Utils.getURLParam('group_id');
+        let currentMonth = Utils.getCurrentMonth();
+        
+        Auth.requireAuth().then(async (authenticated) => {
+            if (!authenticated || !groupId) {
+                window.location.href = '/frontend/groups/list.html';
+                return;
+            }
+            
+            // Load group name
+            const group = await Groups.getGroup(groupId);
+            if (group) {
+                document.getElementById('groupTitle').textContent = `${group.name} - Outside Meals`;
+            }
+            
+            await loadOutsideMeals();
+            
+            document.getElementById('monthSelector').addEventListener('change', (e) => {
+                currentMonth = e.target.value;
+                loadOutsideMeals();
+            });
+        });
+        
+        async function loadOutsideMeals() {
+            const meals = await Meals.getMeals(groupId, currentMonth);
+            const outsideMeals = meals.filter(m => m.meal_category === 'Outside Meal');
+            
+            const container = document.getElementById('outsideMealsContent');
+            
+            if (outsideMeals.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No outside meals recorded for this month</p>';
+                return;
+            }
+            
+            // Group by date and count
+            const mealsByDate = {};
+            outsideMeals.forEach(meal => {
+                const date = meal.meal_date;
+                if (!mealsByDate[date]) {
+                    mealsByDate[date] = { count: 0, users: new Set() };
+                }
+                mealsByDate[date].count++;
+                mealsByDate[date].users.add(meal.user_name);
+            });
+            
+            container.innerHTML = `
+                <h3 style="margin-bottom: var(--spacing-md);">Outside Meals Summary</h3>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--border-color);">
+                                <th style="padding: var(--spacing-sm); text-align: left;">Date</th>
+                                <th style="padding: var(--spacing-sm); text-align: right;">Total Meals</th>
+                                <th style="padding: var(--spacing-sm); text-align: left;">Participants</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.keys(mealsByDate).sort().reverse().map(date => `
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <td style="padding: var(--spacing-sm);">${Utils.formatDate(date, 'full')}</td>
+                                    <td style="padding: var(--spacing-sm); text-align: right;">${mealsByDate[date].count}</td>
+                                    <td style="padding: var(--spacing-sm);">${Array.from(mealsByDate[date].users).join(', ')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
+

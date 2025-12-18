@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg);">
+                <h2 class="section-title" style="margin: 0;" id="groupTitle">Analytics</h2>
+                <div style="display: flex; gap: var(--spacing-md);">
+                    <a href="#" id="settlementLink" class="btn btn-secondary">View Settlement</a>
+                    <button id="generatePDFBtn" class="btn btn-primary">Generate PDF Report</button>
+                </div>
+            </div>
+
+            <div class="dashboard-stats" style="margin-bottom: var(--spacing-xl);">
+                <div class="stat-card">
+                    <div class="stat-label">Total Expenses</div>
+                    <div class="stat-value" id="totalExpenses">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Amount</div>
+                    <div class="stat-value" id="totalAmount">$0.00</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: var(--spacing-lg); margin-bottom: var(--spacing-xl);">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Expenses by Member</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="memberChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Expenses by Month</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="monthChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Expenses by Split Type</h3>
+                </div>
+                <div class="card-body">
+                    <canvas id="splitTypeChart"></canvas>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script src="/frontend/assets/js/groups.js"></script>
+    <script src="/frontend/assets/js/analytics.js"></script>
+    <script>
+        let groupId = Utils.getURLParam('group_id');
+        let memberChart, monthChart, splitTypeChart;
+        
+        Auth.requireAuth().then(async (authenticated) => {
+            if (!authenticated || !groupId) {
+                window.location.href = '/frontend/groups/list.html';
+                return;
+            }
+            
+            // Set links
+            document.getElementById('settlementLink').href = `/frontend/analytics/settlement.html?group_id=${groupId}`;
+            
+            // Load group name
+            const group = await Groups.getGroup(groupId);
+            if (group) {
+                document.getElementById('groupTitle').textContent = `${group.name} - Analytics`;
+            }
+            
+            await loadAnalytics();
+            
+            // PDF generation
+            document.getElementById('generatePDFBtn').addEventListener('click', async () => {
+                Utils.showLoading(document.getElementById('generatePDFBtn'));
+                const result = await Analytics.generatePDF(groupId);
+                if (!result.success) {
+                    Utils.showError(result.message || 'Failed to generate PDF');
+                } else {
+                    Utils.showSuccess('PDF generated successfully!');
+                }
+                Utils.hideLoading(document.getElementById('generatePDFBtn'));
+            });
+        });
+        
+        async function loadAnalytics() {
+            const data = await Analytics.getDashboard(groupId);
+            
+            if (!data) {
+                return;
+            }
+            
+            // Update stats
+            document.getElementById('totalExpenses').textContent = data.total_expenses || 0;
+            document.getElementById('totalAmount').textContent = Utils.formatCurrency(data.total_amount || 0);
+            
+            // Member chart
+            if (data.by_member && data.by_member.length > 0) {
+                const ctx = document.getElementById('memberChart').getContext('2d');
+                if (memberChart) memberChart.destroy();
+                memberChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.by_member.map(m => m.name),
+                        datasets: [{
+                            label: 'Amount Paid',
+                            data: data.by_member.map(m => parseFloat(m.total_paid || 0)),
+                            backgroundColor: 'rgba(0, 122, 255, 0.8)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return Utils.formatCurrency(value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Month chart
+            if (data.by_month && data.by_month.length > 0) {
+                const ctx = document.getElementById('monthChart').getContext('2d');
+                if (monthChart) monthChart.destroy();
+                monthChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.by_month.map(m => m.month),
+                        datasets: [{
+                            label: 'Total Expenses',
+                            data: data.by_month.map(m => parseFloat(m.total || 0)),
+                            borderColor: 'rgb(0, 122, 255)',
+                            backgroundColor: 'rgba(0, 122, 255, 0.1)',
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return Utils.formatCurrency(value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Split type chart
+            if (data.by_split_type && data.by_split_type.length > 0) {
+                const ctx = document.getElementById('splitTypeChart').getContext('2d');
+                if (splitTypeChart) splitTypeChart.destroy();
+                splitTypeChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: data.by_split_type.map(s => s.split_type),
+                        datasets: [{
+                            data: data.by_split_type.map(s => parseInt(s.count || 0)),
+                            backgroundColor: [
+                                'rgba(0, 122, 255, 0.8)',
+                                'rgba(52, 199, 89, 0.8)',
+                                'rgba(255, 149, 0, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>
+

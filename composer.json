@@ -1,0 +1,19 @@
+{
+    "name": "splitter/web-app",
+    "description": "Splitter - Expense Splitting & Personal Finance Tracker Web Application",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "firebase/php-jwt": "^6.0",
+        "tecnickcom/tcpdf": "^6.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Splitter\\": "backend/classes/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
+

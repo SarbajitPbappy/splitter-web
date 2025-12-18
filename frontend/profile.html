@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link active">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container" style="max-width: 600px; margin-top: var(--spacing-xl);">
+            <h2 class="section-title">Profile</h2>
+            
+            <div class="card">
+                <div class="card-body">
+                    <form id="profileForm">
+                        <div class="form-group">
+                            <label for="name" class="form-label required">Full Name</label>
+                            <input type="text" id="name" class="form-input" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" id="email" class="form-input" disabled>
+                            <div class="form-help">Email cannot be changed</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="password" class="form-label">New Password (Optional)</label>
+                            <input type="password" id="password" class="form-input" autocomplete="new-password">
+                            <div class="form-help">Leave blank to keep current password. Must be at least 8 characters with uppercase, lowercase, and number.</div>
+                        </div>
+                        
+                        <div class="form-group" style="display: flex; gap: var(--spacing-md); margin-top: var(--spacing-xl);">
+                            <button type="submit" class="btn btn-primary">Update Profile</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script>
+        Auth.requireAuth().then(async (authenticated) => {
+            if (!authenticated) return;
+            
+            // Load user profile
+            try {
+                const response = await API.get('/users/get_profile.php');
+                if (response.success && response.data) {
+                    const user = response.data;
+                    document.getElementById('name').value = user.name || '';
+                    document.getElementById('email').value = user.email || '';
+                }
+            } catch (error) {
+                console.error('Error loading profile:', error);
+                Utils.showError('Failed to load profile');
+            }
+            
+            // Handle form submission
+            document.getElementById('profileForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const name = document.getElementById('name').value.trim();
+                const password = document.getElementById('password').value;
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                
+                if (!name) {
+                    Utils.showError('Name is required');
+                    return;
+                }
+                
+                if (password && !Utils.validatePassword(password)) {
+                    Utils.showError('Password must be at least 8 characters with uppercase, lowercase, and number');
+                    return;
+                }
+                
+                Utils.showLoading(submitBtn);
+                
+                try {
+                    const updateData = { name: name };
+                    if (password) {
+                        updateData.password = password;
+                    }
+                    
+                    const response = await API.put('/users/update_profile.php', updateData);
+                    
+                    if (response.success) {
+                        Utils.showSuccess('Profile updated successfully!');
+                        // Update user data in auth
+                        Auth.setUser(response.data);
+                    } else {
+                        Utils.showError(response.message || 'Failed to update profile');
+                    }
+                } catch (error) {
+                    Utils.showError(error.message || 'An error occurred');
+                }
+                
+                Utils.hideLoading(submitBtn);
+            });
+        });
+    </script>
+</body>
+</html>
+

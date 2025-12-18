@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Expense - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container" style="max-width: 700px; margin-top: var(--spacing-xl);">
+            <h2 class="section-title">Add Expense</h2>
+            
+            <div class="card">
+                <div class="card-body">
+                    <form id="expenseForm">
+                        <input type="hidden" id="group_id">
+                        
+                        <div class="form-group">
+                            <label for="amount" class="form-label required">Amount</label>
+                            <input type="number" id="amount" class="form-input" step="0.01" min="0.01" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="description" class="form-label">Description</label>
+                            <input type="text" id="description" class="form-input" placeholder="What was this expense for?">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="expense_date" class="form-label required">Date</label>
+                            <input type="date" id="expense_date" class="form-input" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="paid_by" class="form-label required">Paid By</label>
+                            <select id="paid_by" class="form-select" required></select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="split_type" class="form-label required">Split Type</label>
+                            <select id="split_type" class="form-select" required>
+                                <option value="">Select split type...</option>
+                                <option value="Equal">Equal</option>
+                                <option value="Unequal">Unequal</option>
+                                <option value="Shares">Shares</option>
+                            </select>
+                        </div>
+                        
+                        <div id="splitDetails" style="display: none;">
+                            <h3 style="margin-bottom: var(--spacing-md);">Split Details</h3>
+                            <div id="splitInputs"></div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="receipt" class="form-label">Receipt (Optional)</label>
+                            <input type="file" id="receipt" class="form-input" accept="image/*">
+                            <div class="form-help">Upload a photo of the receipt (Max 5MB)</div>
+                        </div>
+                        
+                        <div class="form-group" style="display: flex; gap: var(--spacing-md); margin-top: var(--spacing-xl);">
+                            <button type="submit" class="btn btn-primary">Add Expense</button>
+                            <a href="#" id="cancelLink" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script src="/frontend/assets/js/groups.js"></script>
+    <script src="/frontend/assets/js/expenses.js"></script>
+    <script>
+        let groupId = Utils.getURLParam('group_id');
+        let groupMembers = [];
+        
+        // Set default date to today
+        document.getElementById('expense_date').value = Utils.formatDate(new Date());
+        
+        Auth.requireAuth().then(async (authenticated) => {
+            if (!authenticated || !groupId) {
+                window.location.href = '/frontend/groups/list.html';
+                return;
+            }
+            
+            document.getElementById('group_id').value = groupId;
+            document.getElementById('cancelLink').href = `/frontend/groups/details.html?id=${groupId}`;
+            
+            // Load group details
+            const group = await Groups.getGroup(groupId);
+            if (!group) {
+                Utils.showError('Group not found');
+                window.location.href = '/frontend/groups/list.html';
+                return;
+            }
+            
+            groupMembers = group.members || [];
+            
+            // Populate paid_by dropdown
+            const paidBySelect = document.getElementById('paid_by');
+            paidBySelect.innerHTML = groupMembers.map(member => 
+                `<option value="${member.user_id}">${Utils.escapeHtml(member.name)}</option>`
+            ).join('');
+            
+            // Set current user as default
+            const user = Auth.getUser();
+            if (user) {
+                const currentUserOption = Array.from(paidBySelect.options).find(opt => opt.value == user.user_id);
+                if (currentUserOption) {
+                    paidBySelect.value = user.user_id;
+                }
+            }
+            
+            // Handle split type change
+            document.getElementById('split_type').addEventListener('change', handleSplitTypeChange);
+        });
+        
+        function handleSplitTypeChange() {
+            const splitType = document.getElementById('split_type').value;
+            const splitDetails = document.getElementById('splitDetails');
+            const splitInputs = document.getElementById('splitInputs');
+            
+            if (!splitType || splitType === 'Equal') {
+                splitDetails.style.display = 'none';
+                return;
+            }
+            
+            splitDetails.style.display = 'block';
+            
+            if (splitType === 'Unequal') {
+                splitInputs.innerHTML = groupMembers.map(member => `
+                    <div class="form-group">
+                        <label class="form-label">${Utils.escapeHtml(member.name)}</label>
+                        <input type="number" class="form-input split-amount" 
+                               data-user-id="${member.user_id}" 
+                               step="0.01" min="0" 
+                               placeholder="0.00">
+                    </div>
+                `).join('');
+            } else if (splitType === 'Shares') {
+                splitInputs.innerHTML = groupMembers.map(member => `
+                    <div class="form-group">
+                        <label class="form-label">${Utils.escapeHtml(member.name)} (Shares)</label>
+                        <input type="number" class="form-input split-share" 
+                               data-user-id="${member.user_id}" 
+                               min="1" 
+                               value="1"
+                               placeholder="1">
+                    </div>
+                `).join('');
+            }
+        }
+        
+        document.getElementById('expenseForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const amount = parseFloat(document.getElementById('amount').value);
+            const description = document.getElementById('description').value.trim();
+            const expenseDate = document.getElementById('expense_date').value;
+            const paidBy = parseInt(document.getElementById('paid_by').value);
+            const splitType = document.getElementById('split_type').value;
+            const receiptFile = document.getElementById('receipt').files[0];
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            
+            // Validate split details
+            let splits = [];
+            if (splitType === 'Unequal') {
+                const inputs = document.querySelectorAll('.split-amount');
+                let total = 0;
+                inputs.forEach(input => {
+                    const value = parseFloat(input.value) || 0;
+                    total += value;
+                    splits.push({
+                        user_id: parseInt(input.dataset.userId),
+                        amount: value
+                    });
+                });
+                
+                if (Math.abs(total - amount) > 0.01) {
+                    Utils.showError(`Split amounts must equal the total amount (${Utils.formatCurrency(total)} ≠ ${Utils.formatCurrency(amount)})`);
+                    return;
+                }
+            } else if (splitType === 'Shares') {
+                const inputs = document.querySelectorAll('.split-share');
+                inputs.forEach(input => {
+                    const shares = parseInt(input.value) || 1;
+                    splits.push({
+                        user_id: parseInt(input.dataset.userId),
+                        shares: shares
+                    });
+                });
+            }
+            
+            Utils.showLoading(submitBtn);
+            
+            try {
+                const expenseData = {
+                    group_id: parseInt(groupId),
+                    paid_by_user_id: paidBy,
+                    amount: amount,
+                    description: description,
+                    split_type: splitType,
+                    expense_date: expenseDate,
+                    splits: splits
+                };
+                
+                const result = await Expenses.createExpense(expenseData, receiptFile);
+                
+                if (result.success) {
+                    Utils.showSuccess('Expense added successfully!');
+                    setTimeout(() => {
+                        window.location.href = `/frontend/groups/details.html?id=${groupId}`;
+                    }, 1000);
+                } else {
+                    Utils.showError(result.message || 'Failed to add expense');
+                    Utils.hideLoading(submitBtn);
+                }
+            } catch (error) {
+                Utils.showError(error.message || 'An error occurred');
+                Utils.hideLoading(submitBtn);
+            }
+        });
+    </script>
+</body>
+</html>
+

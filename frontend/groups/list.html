@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groups - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link active">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg);">
+                <h2 class="section-title" style="margin: 0;">All Groups</h2>
+                <a href="/frontend/groups/create.html" class="btn btn-primary">Create Group</a>
+            </div>
+
+            <div class="form-group" style="margin-bottom: var(--spacing-lg);">
+                <label for="filterType" class="form-label">Filter by Type</label>
+                <select id="filterType" class="form-select">
+                    <option value="">All Types</option>
+                    <option value="Trip">Trip</option>
+                    <option value="Bachelor Mess">Bachelor Mess</option>
+                </select>
+            </div>
+
+            <div class="groups-grid" id="groupsGrid">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📊</div>
+                    <h3 class="empty-state-title">Loading groups...</h3>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script src="/frontend/assets/js/groups.js"></script>
+    <script>
+        let allGroups = [];
+        
+        Auth.requireAuth().then(async (authenticated) => {
+            if (!authenticated) return;
+            
+            await loadGroups();
+            
+            document.getElementById('filterType').addEventListener('change', (e) => {
+                filterGroups(e.target.value);
+            });
+        });
+        
+        async function loadGroups() {
+            allGroups = await Groups.getGroups();
+            filterGroups('');
+        }
+        
+        function filterGroups(type) {
+            const grid = document.getElementById('groupsGrid');
+            const filtered = type ? allGroups.filter(g => g.type === type) : allGroups;
+            
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📊</div>
+                        <h3 class="empty-state-title">No groups found</h3>
+                        <p class="empty-state-text">${type ? 'Try changing the filter or' : ''} create a new group!</p>
+                        <a href="/frontend/groups/create.html" class="btn btn-primary">Create Group</a>
+                    </div>
+                `;
+                return;
+            }
+            
+            grid.innerHTML = '';
+            filtered.forEach(group => {
+                grid.appendChild(Groups.renderGroupCard(group));
+            });
+        }
+    </script>
+</body>
+</html>
+

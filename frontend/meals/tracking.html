@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meal Tracking - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg);">
+                <h2 class="section-title" style="margin: 0;" id="groupTitle">Meal Tracking</h2>
+                <div style="display: flex; gap: var(--spacing-md); align-items: center;">
+                    <input type="month" id="monthSelector" class="form-input" style="width: auto;">
+                    <button id="addMealBtn" class="btn btn-primary">Add Meal</button>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: var(--spacing-lg);">
+                <div class="card-body">
+                    <h3>Add Meal Entry</h3>
+                    <form id="mealForm" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--spacing-md); margin-top: var(--spacing-md);">
+                        <div class="form-group">
+                            <label for="meal_date" class="form-label">Date</label>
+                            <input type="date" id="meal_date" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="meal_type" class="form-label">Meal Type</label>
+                            <select id="meal_type" class="form-select" required>
+                                <option value="Breakfast">Breakfast</option>
+                                <option value="Lunch">Lunch</option>
+                                <option value="Dinner">Dinner</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="meal_category" class="form-label">Category</label>
+                            <select id="meal_category" class="form-select" required>
+                                <option value="Mess Meal">Mess Meal</option>
+                                <option value="Outside Meal">Outside Meal</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: flex-end;">
+                            <button type="submit" class="btn btn-primary">Add</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: var(--spacing-lg);">
+                <div class="card-header">
+                    <h3 class="card-title">Monthly Calculations</h3>
+                </div>
+                <div class="card-body" id="calculations">
+                    <p style="text-align: center; color: var(--text-secondary);">Select a month to view calculations</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Meal History</h3>
+                </div>
+                <div class="card-body" id="mealHistory">
+                    <p style="text-align: center; color: var(--text-secondary);">No meals recorded yet</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script src="/frontend/assets/js/groups.js"></script>
+    <script src="/frontend/assets/js/meals.js"></script>
+    <script>
+        let groupId = Utils.getURLParam('group_id');
+        let currentMonth = Utils.getCurrentMonth();
+        
+        // Set default date to today
+        document.getElementById('meal_date').value = Utils.formatDate(new Date());
+        document.getElementById('monthSelector').value = currentMonth;
+        
+        Auth.requireAuth().then(async (authenticated) => {
+            if (!authenticated || !groupId) {
+                window.location.href = '/frontend/groups/list.html';
+                return;
+            }
+            
+            // Load group name
+            const group = await Groups.getGroup(groupId);
+            if (group) {
+                document.getElementById('groupTitle').textContent = `${group.name} - Meal Tracking`;
+            }
+            
+            await loadMealsAndCalculations();
+            
+            // Month selector change
+            document.getElementById('monthSelector').addEventListener('change', (e) => {
+                currentMonth = e.target.value;
+                loadMealsAndCalculations();
+            });
+        });
+        
+        document.getElementById('mealForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const mealDate = document.getElementById('meal_date').value;
+            const mealType = document.getElementById('meal_type').value;
+            const mealCategory = document.getElementById('meal_category').value;
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            
+            Utils.showLoading(submitBtn);
+            
+            const result = await Meals.addMeal(groupId, mealDate, mealType, mealCategory);
+            
+            if (result.success) {
+                Utils.showSuccess('Meal added successfully!');
+                document.getElementById('mealForm').reset();
+                document.getElementById('meal_date').value = Utils.formatDate(new Date());
+                await loadMealsAndCalculations();
+            } else {
+                Utils.showError(result.message || 'Failed to add meal');
+            }
+            
+            Utils.hideLoading(submitBtn);
+        });
+        
+        async function loadMealsAndCalculations() {
+            // Load calculations
+            const calculations = await Meals.calculateMealCosts(groupId, currentMonth);
+            renderCalculations(calculations);
+            
+            // Load meals
+            const meals = await Meals.getMeals(groupId, currentMonth);
+            renderMealHistory(meals);
+        }
+        
+        function renderCalculations(data) {
+            const container = document.getElementById('calculations');
+            
+            if (!data || !data.user_balances) {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No data available for this month</p>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <div style="margin-bottom: var(--spacing-lg);">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--spacing-md); margin-bottom: var(--spacing-md);">
+                        <div>
+                            <div class="stat-label">Total Market Expense</div>
+                            <div class="stat-value">${Utils.formatCurrency(data.total_market_expense || 0)}</div>
+                        </div>
+                        <div>
+                            <div class="stat-label">Total Meals</div>
+                            <div class="stat-value">${data.total_meals || 0}</div>
+                        </div>
+                        <div>
+                            <div class="stat-label">Cost Per Meal</div>
+                            <div class="stat-value">${Utils.formatCurrency(data.cost_per_meal || 0)}</div>
+                        </div>
+                    </div>
+                </div>
+                <h4 style="margin-bottom: var(--spacing-md);">Member Balances</h4>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--border-color);">
+                                <th style="padding: var(--spacing-sm); text-align: left;">Member</th>
+                                <th style="padding: var(--spacing-sm); text-align: right;">Meals Eaten</th>
+                                <th style="padding: var(--spacing-sm); text-align: right;">Total Owed</th>
+                                <th style="padding: var(--spacing-sm); text-align: right;">Contribution</th>
+                                <th style="padding: var(--spacing-sm); text-align: right;">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.user_balances.map(balance => `
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <td style="padding: var(--spacing-sm);">${Utils.escapeHtml(balance.name)}</td>
+                                    <td style="padding: var(--spacing-sm); text-align: right;">${balance.meals_eaten}</td>
+                                    <td style="padding: var(--spacing-sm); text-align: right;">${Utils.formatCurrency(balance.total_owed)}</td>
+                                    <td style="padding: var(--spacing-sm); text-align: right;">${Utils.formatCurrency(balance.contribution)}</td>
+                                    <td style="padding: var(--spacing-sm); text-align: right; font-weight: 600; color: ${balance.balance >= 0 ? 'var(--success-color)' : 'var(--error-color)'};">
+                                        ${Utils.formatCurrency(balance.balance)}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        
+        function renderMealHistory(meals) {
+            const container = document.getElementById('mealHistory');
+            
+            if (!meals || meals.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No meals recorded for this month</p>';
+                return;
+            }
+            
+            // Group meals by date
+            const mealsByDate = {};
+            meals.forEach(meal => {
+                const date = meal.meal_date;
+                if (!mealsByDate[date]) {
+                    mealsByDate[date] = [];
+                }
+                mealsByDate[date].push(meal);
+            });
+            
+            container.innerHTML = Object.keys(mealsByDate).sort().reverse().map(date => `
+                <div style="margin-bottom: var(--spacing-md); padding-bottom: var(--spacing-md); border-bottom: 1px solid var(--border-color);">
+                    <h4 style="margin-bottom: var(--spacing-sm);">${Utils.formatDate(date, 'full')}</h4>
+                    ${mealsByDate[date].map(meal => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-xs) 0;">
+                            <span>
+                                <span class="badge badge-primary" style="margin-right: var(--spacing-sm);">${meal.meal_type}</span>
+                                <span class="badge badge-secondary">${meal.meal_category}</span>
+                                <span style="margin-left: var(--spacing-md);">${Utils.escapeHtml(meal.user_name)}</span>
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Splitter</title>
+    <link rel="stylesheet" href="/frontend/assets/css/style.css">
+    <link rel="stylesheet" href="/frontend/assets/css/components.css">
+    <link rel="stylesheet" href="/frontend/assets/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <div class="container">
+                <div class="dashboard-header-content">
+                    <h1 class="dashboard-title">Splitter</h1>
+                    <nav class="dashboard-nav">
+                        <a href="/frontend/dashboard.html" class="nav-link active">Dashboard</a>
+                        <a href="/frontend/groups/list.html" class="nav-link">Groups</a>
+                        <a href="/frontend/profile.html" class="nav-link">Profile</a>
+                        <button onclick="Auth.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="container">
+            <h2 class="section-title">Welcome, <span id="userName"></span>!</h2>
+            
+            <div class="dashboard-stats" id="stats">
+                <div class="stat-card">
+                    <div class="stat-label">Total Groups</div>
+                    <div class="stat-value" id="totalGroups">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Groups</div>
+                    <div class="stat-value" id="activeGroups">0</div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg);">
+                <h2 class="section-title" style="margin: 0;">Your Groups</h2>
+                <a href="/frontend/groups/create.html" class="btn btn-primary">Create Group</a>
+            </div>
+
+            <div class="groups-grid" id="groupsGrid">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📊</div>
+                    <h3 class="empty-state-title">No groups yet</h3>
+                    <p class="empty-state-text">Create your first group to start splitting expenses!</p>
+                    <a href="/frontend/groups/create.html" class="btn btn-primary">Create Group</a>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/frontend/assets/js/api.js"></script>
+    <script src="/frontend/assets/js/auth.js"></script>
+    <script src="/frontend/assets/js/utils.js"></script>
+    <script src="/frontend/assets/js/groups.js"></script>
+    <script>
+        // Require authentication
+        (async function() {
+            const authenticated = await Auth.requireAuth();
+            console.log('Dashboard auth check:', authenticated);
+            
+            if (!authenticated) {
+                console.log('Not authenticated, redirecting to login');
+                return;
+            }
+            
+            // Load user name
+            const user = Auth.getUser();
+            if (user) {
+                document.getElementById('userName').textContent = user.name;
+            } else {
+                // Try to get user from API if not in localStorage
+                try {
+                    const response = await API.get('/users/get_profile.php');
+                    if (response.success && response.data) {
+                        Auth.setUser(response.data);
+                        document.getElementById('userName').textContent = response.data.name;
+                    }
+                } catch (error) {
+                    console.error('Error loading user profile:', error);
+                }
+            }
+            
+            // Load groups
+            try {
+                const groups = await Groups.getGroups();
+                
+                if (groups.length > 0) {
+                    const grid = document.getElementById('groupsGrid');
+                    grid.innerHTML = '';
+                    
+                    groups.forEach(group => {
+                        grid.appendChild(Groups.renderGroupCard(group));
+                    });
+                    
+                    // Update stats
+                    document.getElementById('totalGroups').textContent = groups.length;
+                    document.getElementById('activeGroups').textContent = groups.filter(g => !g.is_closed).length;
+                }
+            } catch (error) {
+                console.error('Error loading groups:', error);
+            }
+        })();
+    </script>
+</body>
+</html>
+
